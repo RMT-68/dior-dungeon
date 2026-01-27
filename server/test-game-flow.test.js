@@ -6,13 +6,64 @@ jest.mock("./helpers/gemini", () => {
         dungeonName: "Test Dungeon",
         description: "Test Desc",
         difficulty: "easy",
+        theme: "test",
         nodes: [
           { id: 1, name: "Node 1", type: "enemy", enemyId: "e1" },
           { id: 2, name: "Node 2", type: "npc", enemyId: null },
           { id: 3, name: "Node 3", type: "enemy", enemyId: "e1" },
         ],
         enemies: [
-          { id: "e1", name: "Enemy 1", role: "boss", hp: 100, skills: ["hit"] },
+          {
+            id: "e1",
+            name: "Enemy 1",
+            role: "boss",
+            hp: 150,
+            maxHP: 150,
+            stamina: 60,
+            maxStamina: 60,
+            skillPower: 2.0,
+            skills: [
+              {
+                name: "Attack",
+                description: "Basic attack",
+                type: "damage",
+                amount: 10,
+              },
+            ],
+          },
+        ],
+      });
+    }
+    if (prompt.includes("character generator")) {
+      return JSON.stringify({
+        id: "character-1",
+        name: "Test Warrior",
+        role: "Warrior",
+        theme: "Dark Forest",
+        hp: 120,
+        maxHP: 120,
+        stamina: 80,
+        maxStamina: 80,
+        skillPower: 1.5,
+        skills: [
+          {
+            name: "Slash",
+            description: "Basic attack",
+            type: "damage",
+            amount: 20,
+          },
+          {
+            name: "Heal",
+            description: "Basic heal",
+            type: "healing",
+            amount: 10,
+          },
+          {
+            name: "Bash",
+            description: "Heavy attack",
+            type: "damage",
+            amount: 30,
+          },
         ],
       });
     }
