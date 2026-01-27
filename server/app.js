@@ -18,6 +18,9 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+const RoomController = require("./controllers/roomController");
+const GameHandler = require("./socket/gameHandler");
+
 // Routes
 app.get("/health", (req, res) => {
   res.json({ status: "Server is running" });
@@ -26,11 +29,19 @@ app.get("/health", (req, res) => {
 // Use test routes
 app.use(testRoutes);
 
-// Move into separate file
-io.on("connection", (socket) => {});
+app.post("/api/rooms", RoomController.createRoom);
+app.get("/api/rooms", RoomController.getRooms);
+app.get("/api/rooms/:id", RoomController.getRoomDetails);
 
-server.listen(3000, () => {
-  console.log("server running at http://localhost:3000");
+// Socket.io Connection
+io.on("connection", (socket) => {
+  new GameHandler(io, socket);
 });
 
-module.exports = app;
+if (require.main === module) {
+  server.listen(3000, () => {
+    console.log("server running at http://localhost:3000");
+  });
+}
+
+module.exports = { app, server, io };

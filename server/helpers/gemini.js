@@ -1,12 +1,18 @@
 const { GoogleGenAI } = require("@google/genai");
 
-const ai = new GoogleGenAI({});
-
 async function gemini(model, prompt) {
-  const allowedModels = ["gemini-3-flash-preview", "gemini-3-pro", "gemini-3-pro-preview"];
+  const allowedModels = [
+    "gemini-3-flash-preview",
+    "gemini-3-pro",
+    "gemini-3-pro-preview",
+  ];
   if (!allowedModels.includes(model)) {
     throw new Error(`Invalid model name: ${model}`);
   }
+
+  // Lazy load/instantiate to support delayed env loading and mocking
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
   try {
     const response = await ai.models.generateContent({
       model: model,
