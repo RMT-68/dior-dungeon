@@ -4,6 +4,7 @@ const cors = require("cors");
 const { createServer } = require("node:http");
 const { join } = require("node:path");
 const { Server } = require("socket.io");
+const testRoutes = require("./routes/testRoutes");
 
 const app = express();
 const server = createServer(app);
@@ -24,6 +25,9 @@ const GameHandler = require("./socket/gameHandler");
 app.get("/health", (req, res) => {
   res.json({ status: "Server is running" });
 });
+
+// Use test routes
+app.use(testRoutes);
 
 app.post("/api/rooms", RoomController.createRoom);
 app.get("/api/rooms", RoomController.getRooms);
