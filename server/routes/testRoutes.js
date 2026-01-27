@@ -22,6 +22,34 @@ const {
  * }
  */
 router.post("/api/dungeon/generate", async (req, res) => {
+  /**
+   * Expected Response (200):
+   * {
+   *   success: true,
+   *   data: {
+   *     dungeonName: string,
+   *     description: string,
+   *     difficulty: "easy"|"medium"|"hard",
+   *     theme: string,
+   *     nodes: [
+   *       { id: number, name: string, type: "enemy"|"npc", enemyId: string|null }
+   *     ],
+   *     enemies: [
+   *       {
+   *         id: string,
+   *         name: string,
+   *         role: "minion"|"elite"|"boss",
+   *         hp: number, maxHP: number,
+   *         stamina: number, maxStamina: number,
+   *         skillPower: number,
+   *         archetype: string,
+   *         skills: [{ name: string, description: string, type: "damage"|"healing", amount: number }]
+   *       }
+   *     ]
+   *   }
+   * }
+   * Error (4xx/5xx): { success: false, error: string }
+   */
   try {
     const { theme, difficulty, maxNode, language = "en" } = req.body;
 
@@ -76,6 +104,23 @@ router.get("/api/dungeon/template", (req, res) => {
  * }
  */
 router.post("/api/character/generate", async (req, res) => {
+  /**
+   * Expected Response (200):
+   * {
+   *   success: true,
+   *   data: {
+   *     id: string,
+   *     name: string,
+   *     role: "Warrior"|"Mage"|"Rogue"|"Paladin"|"Ranger"|"Cleric",
+   *     theme: string,
+   *     hp: number, maxHP: number,
+   *     stamina: number, maxStamina: number,
+   *     skillPower: number,
+   *     skills: [{ name: string, description: string, type: "damage"|"healing", amount: number }]
+   *   }
+   * }
+   * Error (4xx/5xx): { success: false, error: string }
+   */
   try {
     const { theme, language = "en" } = req.body;
 
@@ -144,6 +189,27 @@ router.get("/api/character/template", (req, res) => {
  * }
  */
 router.post("/api/npc/generate", async (req, res) => {
+  /**
+   * Expected Response (200):
+   * {
+   *   success: true,
+   *   data: {
+   *     npcName: string,
+   *     description: string,
+   *     choices: [
+   *       {
+   *         id: "positive"|"negative",
+   *         label: string,
+   *         outcome: {
+   *           narrative: string,
+   *           effects: { hpBonus: number, staminaBonus: number, skillPowerBonus: number }
+   *         }
+   *       }
+   *     ]
+   *   }
+   * }
+   * Error (4xx/5xx): { success: false, error: string }
+   */
   try {
     const { theme, nodeId, playerState, language = "en" } = req.body;
 
@@ -219,6 +285,43 @@ router.get("/api/npc/template", (req, res) => {
  * }
  */
 router.post("/api/battle/narrate", async (req, res) => {
+  /**
+   * Expected Response (200):
+   * {
+   *   success: true,
+   *   data: {
+   *     success: true,
+   *     round: number,
+   *     playerActions: [
+   *       {
+   *         playerId: string,
+   *         playerName: string,
+   *         actionType: "attack"|"heal"|"defend",
+   *         skillName: string,
+   *         diceRoll: number,
+   *         // if attack: { finalDamage: number, isCritical: boolean, isMiss: boolean }
+   *         // if heal: { finalHeal: number }
+   *         // if defend: { defenseBonus: number }
+   *       }
+   *     ],
+   *     narrative: string,
+   *     playerNarratives: [{ playerId: string, narrative: string }],
+   *     enemyAction: null | {
+   *       type: "attack"|"heal",
+   *       skillName: string,
+   *       diceRoll: number,
+   *       finalDamage?: number,
+   *       healAmount?: number,
+   *       narrative: string,
+   *       targetName?: string
+   *     },
+   *     enemyHP: { previous: number, current: number, damage: number },
+   *     enemyDefeated: boolean,
+   *     battleState: { currentRound: number }
+   *   }
+   * }
+   * Error (4xx/5xx): { success: false, error: string }
+   */
   try {
     const { theme, enemy, playerActions, battleState, language = "en" } = req.body;
 
@@ -320,6 +423,14 @@ router.get("/api/battle/template", (req, res) => {
  * }
  */
 router.post("/api/story/transition", async (req, res) => {
+  /**
+   * Expected Response (200):
+   * {
+   *   success: true,
+   *   data: { narrative: string, mood: "tense"|"hopeful"|"mysterious"|"triumphant"|"neutral" }
+   * }
+   * Error (4xx/5xx): { success: false, error: string }
+   */
   try {
     const { theme, currentNode, nextNode, partyState, language = "en" } = req.body;
 
@@ -388,6 +499,18 @@ router.get("/api/story/transition/template", (req, res) => {
  * }
  */
 router.post("/api/story/thus-far", async (req, res) => {
+  /**
+   * Expected Response (200):
+   * {
+   *   success: true,
+   *   data: {
+   *     summary: string,
+   *     keyMoments: string[],
+   *     outlook: "promising"|"challenging"|"desperate"|"victorious"
+   *   }
+   * }
+   * Error (4xx/5xx): { success: false, error: string }
+   */
   try {
     const { theme, dungeonName, gameLog, partyState, currentNode, totalNodes, language = "en" } = req.body;
 
@@ -461,6 +584,18 @@ router.get("/api/story/thus-far/template", (req, res) => {
  * }
  */
 router.post("/api/story/after-battle", async (req, res) => {
+  /**
+   * Expected Response (200):
+   * {
+   *   success: true,
+   *   data: {
+   *     summary: string,
+   *     tone: "triumphant"|"bittersweet"|"hard-won"|"costly",
+   *     quote: string|null
+   *   }
+   * }
+   * Error (4xx/5xx): { success: false, error: string }
+   */
   try {
     const { theme, enemy, battleLog, partyState, rewards, language = "en" } = req.body;
 
@@ -546,6 +681,19 @@ router.get("/api/story/after-battle/template", (req, res) => {
  * }
  */
 router.post("/api/story/final-summary", async (req, res) => {
+  /**
+   * Expected Response (200):
+   * {
+   *   success: true,
+   *   data: {
+   *     summary: string,
+   *     highlights: string[],
+   *     legendStatus: "legendary"|"heroic"|"valiant"|"tragic",
+   *     epitaph: string
+   *   }
+   * }
+   * Error (4xx/5xx): { success: false, error: string }
+   */
   try {
     const { theme, dungeonName, completeGameLog, finalStats, outcome, language = "en" } = req.body;
 
