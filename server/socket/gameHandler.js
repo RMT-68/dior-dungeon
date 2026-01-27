@@ -79,6 +79,33 @@ class GameHandler {
         players: players,
       });
 
+      if (room.status === "playing") {
+        // Generate Story Thus Far for joining player
+        try {
+          const history = room.game_state.adventure_log || [];
+          const players = await Player.findAll({ where: { room_id: room.id } });
+          const partyState = {
+            playerCount: players.length,
+            aliveCount: players.filter((p) => p.is_alive).length,
+            averageHP: 80, // Placeholder, calculate real if needed
+          };
+
+          const summary = await generateStoryThusFar({
+            theme: room.theme,
+            dungeonName: room.dungeon_data.dungeonName,
+            gameLog: history,
+            partyState: partyState,
+            currentNode: room.current_node_index + 1,
+            totalNodes: room.dungeon_data.nodes.length,
+            language: room.language,
+          });
+
+          this.socket.emit("story_summary", summary);
+        } catch (e) {
+          console.error("Error generating summary on join:", e);
+        }
+      }
+
       console.log(`Player ${username} joined room ${roomCode}`);
     } catch (error) {
       console.error("Join room error:", error);
@@ -133,8 +160,8 @@ class GameHandler {
         p.character_data = charData;
 
         // Initialize current stats from AI generated max values
-        p.current_hp = charData.hp; // New AI returns numbers directly
-        p.current_stamina = charData.stamina;
+        p.current_hp = parseInt(charData.hp) || 100;
+        p.current_stamina = parseInt(charData.stamina) || 100;
 
         return p.save();
       });
@@ -147,11 +174,16 @@ class GameHandler {
 
       // Initialize game state with first node
       const firstNode = room.dungeon_data.nodes[0];
+      const initialEnemy =
+        firstNode.type === "enemy"
+          ? room.dungeon_data.enemies.find((e) => e.id === firstNode.enemyId)
+          : null;
 
       room.game_state = {
         round: 1,
         turnIndex: 0,
-        logs: [],
+        logs: [], // Current battle logs
+        adventure_log: [], // Global history: { type: 'battle'|'npc_event', result: 'victory'|..., details: ... }
         currentTurnActions: [], // Track actions for current round
         currentNode: firstNode,
         currentEnemy: initialEnemy, // If undefined, that's fine for NPC nodes
@@ -321,14 +353,28 @@ class GameHandler {
 
     // Check Victory/Defeat
     let battleStatus = "ongoing";
+    let adventureLogObj = null;
+
     if (updatedEnemy.hp <= 0) {
       battleStatus = "victory";
+      adventureLogObj = {
+        type: "battle",
+        result: "victory",
+        enemy: currentEnemy.name,
+        round: gameState.round,
+      };
     }
     const anyAlive = (
       await Player.findAll({ where: { room_id: room.id } })
     ).some((p) => p.is_alive);
     if (!anyAlive) {
       battleStatus = "defeat";
+      adventureLogObj = {
+        type: "battle",
+        result: "defeat",
+        enemy: currentEnemy.name,
+        round: gameState.round,
+      };
     }
 
     // Save Room State
@@ -337,6 +383,9 @@ class GameHandler {
       round: nextRound,
       logs: newLogs,
       currentEnemy: updatedEnemy,
+      adventure_log: adventureLogObj
+        ? [...(gameState.adventure_log || []), adventureLogObj]
+        : gameState.adventure_log || [],
       currentTurnActions: [], // Reset actions
     };
     await room.save();
@@ -374,7 +423,7 @@ class GameHandler {
       const finalSummary = await generateFinalGameSummary({
         theme: room.theme,
         dungeonName: room.dungeon_data.dungeonName,
-        completeGameLog: [],
+        completeGameLog: room.game_state.adventure_log || [],
         finalStats: { partySize: players.length, survivors: 0 },
         outcome: "defeat",
         language: room.language,
@@ -401,7 +450,7 @@ class GameHandler {
         const finalSummary = await generateFinalGameSummary({
           theme: room.theme,
           dungeonName: room.dungeon_data.dungeonName,
-          completeGameLog: [],
+          completeGameLog: room.game_state.adventure_log || [],
           finalStats: {
             partySize: players.length,
             survivors: players.filter((p) => p.is_alive).length,
@@ -472,6 +521,17 @@ class GameHandler {
     });
 
     this.io.to(room.room_code).emit("npc_event", event);
+
+    // Store event to log (maybe wait for result? Or log encounter now?)
+    // Let's log it now as 'npc_event'
+    room.game_state = {
+      ...room.game_state,
+      adventure_log: [
+        ...(room.game_state.adventure_log || []),
+        { type: "npc_event", npc: event.npcName },
+      ],
+    };
+    await room.save();
   }
 
   async npcChoice({ choiceId }) {
