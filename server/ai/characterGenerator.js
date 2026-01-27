@@ -50,11 +50,14 @@ Character Role HP ranges:
 Generate ONLY valid JSON with this EXACT structure (no markdown, no code blocks, just pure JSON):
 
 {
-  "characterName": "Creative character name fitting the theme",
-  "characterRole": "Warrior | Mage | Rogue | Paladin | Ranger | Cleric",
+  "id": "character-1",
+  "name": "Creative character name fitting the theme",
+  "role": "Warrior | Mage | Rogue | Paladin | Ranger | Cleric",
   "theme": "${theme}",
   "hp": 100,
+  "maxHP": 100,
   "stamina": 75,
+  "maxStamina": 75,
   "skillPower": 2.0,
   "skills": [
     {
@@ -102,8 +105,8 @@ Remember: Generate exactly 3-4 skills. All values must be numbers for HP, Stamin
  * Validate the character structure matches requirements
  */
 function validateCharacterStructure(character) {
-  if (!character.characterName || !character.characterRole) {
-    throw new Error("Missing required character properties: characterName, characterRole");
+  if (!character.name || !character.role) {
+    throw new Error("Missing required character properties: name, role");
   }
 
   if (
@@ -119,7 +122,7 @@ function validateCharacterStructure(character) {
   }
 
   const validRoles = ["Warrior", "Mage", "Rogue", "Paladin", "Ranger", "Cleric"];
-  if (!validRoles.includes(character.characterRole)) {
+  if (!validRoles.includes(character.role)) {
     throw new Error(`Invalid character role. Must be one of: ${validRoles.join(", ")}`);
   }
 
@@ -220,11 +223,14 @@ function createFallbackCharacter({ theme = "Fantasy", language = "en" }) {
   }
 
   return {
-    characterName: `${selectedRole} of the ${theme}`,
-    characterRole: selectedRole,
+    id: "character-1",
+    name: `${selectedRole} of the ${theme}`,
+    role: selectedRole,
     theme: theme,
     hp: Math.round(hp),
+    maxHP: Math.round(hp),
     stamina: Math.round(stamina),
+    maxStamina: Math.round(stamina),
     skillPower: Math.round(skillPower * 100) / 100,
     skills: skillsDefault.slice(0, 3 + Math.floor(Math.random() * 2)),
   };

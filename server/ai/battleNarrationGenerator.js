@@ -126,7 +126,7 @@ Generate ONLY valid JSON:
             skillName: enemySkill.name,
             baseDamage: enemySkill.amount,
             diceRoll: enemyDiceRoll,
-            ...calculateEnemyDamage(enemySkill, enemyDiceRoll),
+            ...calculateEnemyDamage(enemySkill, enemyDiceRoll, enemy.skillPower),
             narrative: narration.enemyAction.narrative,
           };
         } else if (enemySkill.type === "healing") {
@@ -234,9 +234,9 @@ function calculateHealing(action, diceRoll) {
 }
 
 /**
- * Calculate enemy damage
+ * Calculate enemy damage with skillPower multiplier
  */
-function calculateEnemyDamage(skill, diceRoll) {
+function calculateEnemyDamage(skill, diceRoll, skillPower = 2.0) {
   const isCritical = diceRoll >= 18;
   const isMiss = diceRoll <= 2;
 
@@ -248,7 +248,7 @@ function calculateEnemyDamage(skill, diceRoll) {
     };
   }
 
-  let damage = skill.amount + diceRoll / 10;
+  let damage = skill.amount * skillPower + diceRoll / 10;
   if (isCritical) {
     damage *= 2;
   }
@@ -319,7 +319,7 @@ function createFallbackBattleResult({
         skillName: attackSkill.name,
         baseDamage: attackSkill.amount,
         diceRoll: diceRoll,
-        ...calculateEnemyDamage(attackSkill, diceRoll),
+        ...calculateEnemyDamage(attackSkill, diceRoll, enemy.skillPower),
         narrative: `The ${enemy.name} attacks with ${attackSkill.name}!`,
       };
     }
