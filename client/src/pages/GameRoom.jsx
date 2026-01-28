@@ -13,9 +13,7 @@ const ROOM_ID = "demo-room";
 export default function GameRoom() {
   const { t } = useLanguage();
 
-  const [messages, setMessages] = useState([
-    { id: 1, type: "ai", text: "Waiting for dungeon master..." },
-  ]);
+  const [messages, setMessages] = useState([{ id: 1, type: "ai", text: "Waiting for dungeon master..." }]);
 
   const [nodes, setNodes] = useState([]);
   const [currentNodeIndex, setCurrentNodeIndex] = useState(0);
@@ -31,15 +29,27 @@ export default function GameRoom() {
   });
 
   useEffect(() => {
-    socket.connect();
+    // Connect socket if not already connected
+    if (!socket.connected) socket.connect();
 
-    socket.on("connect", () => {
+    const handleConnect = () => {
       // Use correct event name and payload keys matching server
       socket.emit("join_room", {
         roomCode: ROOM_ID,
         username: USERNAME,
       });
-    });
+    };
+
+    // If already connected, emit immediately
+    if (socket.connected) {
+      socket.emit("join_room", {
+        roomCode: ROOM_ID,
+        username: USERNAME,
+      });
+    } else {
+      // Otherwise, wait for connection
+      socket.once("connect", handleConnect);
+    }
 
     // Listen for join success to get our ID
     socket.on("join_room_success", (data) => {
@@ -72,17 +82,17 @@ export default function GameRoom() {
 
     socket.on("game:update", (data) => {
       if (data.nodes) setNodes(data.nodes);
-      if (data.currentNodeIndex !== undefined)
-        setCurrentNodeIndex(data.currentNodeIndex);
+      if (data.currentNodeIndex !== undefined) setCurrentNodeIndex(data.currentNodeIndex);
       if (data.character) setCharacter(data.character);
     });
 
     return () => {
+      socket.off("connect", handleConnect);
       socket.off("join_room_success");
       socket.off("room_update");
       socket.off("ai:message");
       socket.off("game:update");
-      socket.disconnect();
+      // Don't disconnect - keep connection alive for the session
     };
   }, [myPlayerId]); // Add myPlayerId dependency to update character correctly
 
@@ -114,12 +124,10 @@ export default function GameRoom() {
       <div className="border-bottom p-2 bg-white d-flex justify-content-between align-items-center">
         <div>
           <h4 className="mb-0">
-            🧙 {t("game.dungeonNode")}{" "}
-            {nodes.length ? currentNodeIndex + 1 : "-"}
+            🧙 {t("game.dungeonNode")} {nodes.length ? currentNodeIndex + 1 : "-"}
           </h4>
           <small>
-            {t("game.hp")}: {character.hp} | {t("game.status")}:{" "}
-            {character.isAlive ? t("game.alive") : t("game.dead")}
+            {t("game.hp")}: {character.hp} | {t("game.status")}: {character.isAlive ? t("game.alive") : t("game.dead")}
           </small>
         </div>
         <LanguageToggle />
@@ -132,10 +140,7 @@ export default function GameRoom() {
 
         <div className="col-9 d-flex flex-column p-0">
           <ChatBox messages={messages} />
-          <CommandInput
-            onSend={handleSendMessage}
-            disabled={!character.isAlive}
-          />
+          <CommandInput onSend={handleSendMessage} disabled={!character.isAlive} />
         </div>
       </div>
     </div>
