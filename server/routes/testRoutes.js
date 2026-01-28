@@ -12,6 +12,47 @@ const {
 } = require("../ai/storyGenerator");
 
 /**
+ * How to use test routes in postman:
+ * 1. Set header "X-API-Key" to the value of TEST_API_KEY in your .env file
+ * 2. Get /api/dungeon/template to see expected request body for dungeon generation
+ * 3. Post to /api/dungeon/generate with JSON body to test dungeon generation
+ */
+
+/**
+ * Middleware: Validate API key from X-API-Key header
+ * Protects test routes from unauthorized AI generation calls
+ */
+
+const authenticateTestKey = (req, res, next) => {
+  const apiKey = req.headers["x-api-key"];
+  const validKey = process.env.TEST_API_KEY;
+
+  if (!validKey) {
+    console.warn("TEST_API_KEY not set in environment");
+    return res.status(503).json({
+      success: false,
+      error: "API key not configured on server",
+    });
+  }
+
+  if (!apiKey) {
+    return res.status(401).json({
+      success: false,
+      error: "Missing X-API-Key header",
+    });
+  }
+
+  if (apiKey !== validKey) {
+    return res.status(403).json({
+      success: false,
+      error: "Invalid API key",
+    });
+  }
+
+  next();
+};
+
+/**
  * Endpoint to test dungeon generation
  * POST /api/dungeon/generate
  * Body: {
@@ -21,7 +62,7 @@ const {
  *   "language": "string" (optional, default: "en")
  * }
  */
-router.post("/api/dungeon/generate", async (req, res) => {
+router.post("/api/dungeon/generate", authenticateTestKey, async (req, res) => {
   /**
    * Expected Response (200):
    * {
@@ -103,7 +144,7 @@ router.get("/api/dungeon/template", (req, res) => {
  *   "language": "string" (optional, default: "en")
  * }
  */
-router.post("/api/character/generate", async (req, res) => {
+router.post("/api/character/generate", authenticateTestKey, async (req, res) => {
   /**
    * Expected Response (200):
    * {
@@ -188,7 +229,7 @@ router.get("/api/character/template", (req, res) => {
  *   "language": "string" (optional, default: "en")
  * }
  */
-router.post("/api/npc/generate", async (req, res) => {
+router.post("/api/npc/generate", authenticateTestKey, async (req, res) => {
   /**
    * Expected Response (200):
    * {
@@ -284,7 +325,7 @@ router.get("/api/npc/template", (req, res) => {
  *   "language": "string" (optional, default: "en")
  * }
  */
-router.post("/api/battle/narrate", async (req, res) => {
+router.post("/api/battle/narrate", authenticateTestKey, async (req, res) => {
   /**
    * Expected Response (200):
    * {
@@ -422,7 +463,7 @@ router.get("/api/battle/template", (req, res) => {
  *   "language": "string" (optional, default: "en")
  * }
  */
-router.post("/api/story/transition", async (req, res) => {
+router.post("/api/story/transition", authenticateTestKey, async (req, res) => {
   /**
    * Expected Response (200):
    * {
@@ -498,7 +539,7 @@ router.get("/api/story/transition/template", (req, res) => {
  *   "language": "string" (optional, default: "en")
  * }
  */
-router.post("/api/story/thus-far", async (req, res) => {
+router.post("/api/story/thus-far", authenticateTestKey, async (req, res) => {
   /**
    * Expected Response (200):
    * {
@@ -583,7 +624,7 @@ router.get("/api/story/thus-far/template", (req, res) => {
  *   "language": "string" (optional, default: "en")
  * }
  */
-router.post("/api/story/after-battle", async (req, res) => {
+router.post("/api/story/after-battle", authenticateTestKey, async (req, res) => {
   /**
    * Expected Response (200):
    * {
@@ -680,7 +721,7 @@ router.get("/api/story/after-battle/template", (req, res) => {
  *   "language": "string" (optional, default: "en")
  * }
  */
-router.post("/api/story/final-summary", async (req, res) => {
+router.post("/api/story/final-summary", authenticateTestKey, async (req, res) => {
   /**
    * Expected Response (200):
    * {
