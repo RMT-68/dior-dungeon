@@ -20,11 +20,11 @@ export default function WaitingRoom() {
   const [isReady, setIsReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [hasJoined, setHasJoined] = useState(false);
 
   const [regenCount, setRegenCount] = useState(0);
   const MAX_REGEN = 3;
   const maxPlayers = 3;
+  const [hasJoined, setHasJoined] = useState(false);
 
   /* ================= SAFETY ================= */
   useEffect(() => {
@@ -39,14 +39,10 @@ export default function WaitingRoom() {
   /* ================= SOCKET ================= */
   useEffect(() => {
     if (!socket.connected) socket.connect();
+    if (!roomCode || !username) return;
 
-    // Prevent double join - only emit join_room once per session
-    if (!hasJoined) {
-      socket.emit("join_room", { roomCode, username });
-      setHasJoined(true);
-    }
-
-    socket.on("room_update", ({ room, players }) => {
+    // Define handler functions
+    const handleRoomUpdate = ({ room, players }) => {
       setRoom(room);
       setPlayers(players);
       setLoading(false);
@@ -56,26 +52,35 @@ export default function WaitingRoom() {
 
       const statusMap = {};
       players.forEach((p) => {
-        statusMap[p.id] = !!(
-          p.character_data && Object.keys(p.character_data).length > 0
-        );
+        statusMap[p.id] = !!(p.character_data && Object.keys(p.character_data).length > 0);
       });
       setCharacterStatus(statusMap);
-    });
+    };
 
-    socket.on("game_start", () => navigate("/game"));
+    const handleGameStart = () => navigate("/game");
 
-    socket.on("error", (err) => {
+    const handleError = (err) => {
       alert(err.message || "Something went wrong");
       navigate("/");
-    });
+    };
+
+    // Register listeners
+    socket.on("room_update", handleRoomUpdate);
+    socket.on("game_start", handleGameStart);
+    socket.on("error", handleError);
+
+    // Emit join only once
+    if (!hasJoined) {
+      socket.emit("join_room", { roomCode, username });
+      setHasJoined(true);
+    }
 
     return () => {
-      socket.off("room_update");
-      socket.off("game_start");
-      socket.off("error");
+      socket.off("room_update", handleRoomUpdate);
+      socket.off("game_start", handleGameStart);
+      socket.off("error", handleError);
     };
-  }, [roomCode, username]);
+  }, [roomCode, username, navigate, hasJoined]);
 
   const myPlayer = players.find((p) => p.username === username);
 
@@ -91,14 +96,11 @@ export default function WaitingRoom() {
       const isFirst = regenCount === 0;
       const endpoint = isFirst ? "generate" : "regenerate";
 
-      const res = await fetch(
-        `http://localhost:3000/api/characters/${myPlayer.id}/${endpoint}`,
-        {
-          method: isFirst ? "POST" : "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roomCode }),
-        },
-      );
+      const res = await fetch(`http://localhost:3000/api/characters/${myPlayer.id}/${endpoint}`, {
+        method: isFirst ? "POST" : "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomCode }),
+      });
 
       const json = await res.json();
       if (!json?.success) {
@@ -108,11 +110,7 @@ export default function WaitingRoom() {
 
       const charData = json.data.player.character_data;
 
-      setPlayers((prev) =>
-        prev.map((p) =>
-          p.id === myPlayer.id ? { ...p, character_data: charData } : p,
-        ),
-      );
+      setPlayers((prev) => prev.map((p) => (p.id === myPlayer.id ? { ...p, character_data: charData } : p)));
 
       setCharacterStatus((prev) => ({
         ...prev,
@@ -137,9 +135,7 @@ export default function WaitingRoom() {
     socket.emit("start_game");
   };
 
-  const allCharactersGenerated =
-    players.length === maxPlayers &&
-    players.every((p) => characterStatus[p.id]);
+  const allCharactersGenerated = players.length === maxPlayers && players.every((p) => characterStatus[p.id]);
 
   const slots = Array.from({ length: maxPlayers });
 
@@ -154,10 +150,7 @@ export default function WaitingRoom() {
   /* ================= RENDER ================= */
   return (
     <div className="dungeon-bg">
-      <div
-        className="d-flex justify-content-end p-3"
-        style={{ position: "absolute", top: 0, right: 0 }}
-      >
+      <div className="d-flex justify-content-end p-3" style={{ position: "absolute", top: 0, right: 0 }}>
         <LanguageToggle />
       </div>
       <h2 className="waiting-title">{t("waiting.title")}</h2>
@@ -166,9 +159,7 @@ export default function WaitingRoom() {
         <div className="waiting-dungeon-info">
           <h3>{room.dungeon_data.dungeonName}</h3>
           <p>{room.dungeon_data.description}</p>
-          <span className="badge">
-            Difficulty: {room.dungeon_data.difficulty?.toUpperCase()}
-          </span>
+          <span className="badge">Difficulty: {room.dungeon_data.difficulty?.toUpperCase()}</span>
         </div>
       )}
 
@@ -184,10 +175,7 @@ export default function WaitingRoom() {
             const hasChar = player && characterStatus[player.id];
 
             return (
-              <div
-                key={index}
-                className={`player-card ${player?.is_ready ? "ready" : ""} ${!player ? "empty" : ""}`}
-              >
+              <div key={index} className={`player-card ${player?.is_ready ? "ready" : ""} ${!player ? "empty" : ""}`}>
                 {player ? (
                   <>
                     <div className="player-name">
@@ -196,9 +184,7 @@ export default function WaitingRoom() {
 
                     {hasChar && player.character_data ? (
                       <div className="character-info">
-                        <div className="character-role">
-                          {player.character_data.role}
-                        </div>
+                        <div className="character-role">{player.character_data.role}</div>
 
                         <div className="character-stats">
                           <div>HP: {player.character_data.hp}</div>
@@ -208,16 +194,12 @@ export default function WaitingRoom() {
                         {/* 🔥 FIXED SKILL LAYOUT */}
                         <div className="character-skills">
                           <ul>
-                            {player.character_data.skills
-                              ?.slice(0, 3)
-                              .map((s, i) => (
-                                <li key={i}>
-                                  <span className="skill-name">{s.name}</span>
-                                  <span className={`skill-type ${s.type}`}>
-                                    {s.type === "damage" ? "DMG" : "HEAL"}
-                                  </span>
-                                </li>
-                              ))}
+                            {player.character_data.skills?.slice(0, 3).map((s, i) => (
+                              <li key={i}>
+                                <span className="skill-name">{s.name}</span>
+                                <span className={`skill-type ${s.type}`}>{s.type === "damage" ? "DMG" : "HEAL"}</span>
+                              </li>
+                            ))}
                           </ul>
                         </div>
                       </div>
@@ -232,9 +214,7 @@ export default function WaitingRoom() {
                         onClick={handleGenerateCharacter}
                       >
                         <span>
-                          {regenCount === 0
-                            ? "GENERATE CHARACTER"
-                            : `REGENERATE (${regenCount}/${MAX_REGEN})`}
+                          {regenCount === 0 ? "GENERATE CHARACTER" : `REGENERATE (${regenCount}/${MAX_REGEN})`}
                         </span>
                       </button>
                     )}
@@ -252,11 +232,7 @@ export default function WaitingRoom() {
             <span>{isReady ? "UNREADY" : "READY"}</span>
           </button>
 
-          <button
-            className="btn btn-dungeon-primary"
-            disabled={!allCharactersGenerated}
-            onClick={handleStart}
-          >
+          <button className="btn btn-dungeon-primary" disabled={!allCharactersGenerated} onClick={handleStart}>
             <span>{t("waiting.startDungeon")}</span>
           </button>
         </div>

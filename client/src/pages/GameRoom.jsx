@@ -13,9 +13,7 @@ const ROOM_ID = "demo-room";
 export default function GameRoom() {
   const { t } = useLanguage();
 
-  const [messages, setMessages] = useState([
-    { id: 1, type: "ai", text: "Waiting for dungeon master..." },
-  ]);
+  const [messages, setMessages] = useState([{ id: 1, type: "ai", text: "Waiting for dungeon master..." }]);
 
   const [nodes, setNodes] = useState([]);
   const [currentNodeIndex, setCurrentNodeIndex] = useState(0);
@@ -72,8 +70,7 @@ export default function GameRoom() {
 
     socket.on("game:update", (data) => {
       if (data.nodes) setNodes(data.nodes);
-      if (data.currentNodeIndex !== undefined)
-        setCurrentNodeIndex(data.currentNodeIndex);
+      if (data.currentNodeIndex !== undefined) setCurrentNodeIndex(data.currentNodeIndex);
       if (data.character) setCharacter(data.character);
     });
 
@@ -114,12 +111,10 @@ export default function GameRoom() {
       <div className="border-bottom p-2 bg-white d-flex justify-content-between align-items-center">
         <div>
           <h4 className="mb-0">
-            🧙 {t("game.dungeonNode")}{" "}
-            {nodes.length ? currentNodeIndex + 1 : "-"}
+            🧙 {t("game.dungeonNode")} {nodes.length ? currentNodeIndex + 1 : "-"}
           </h4>
           <small>
-            {t("game.hp")}: {character.hp} | {t("game.status")}:{" "}
-            {character.isAlive ? t("game.alive") : t("game.dead")}
+            {t("game.hp")}: {character.hp} | {t("game.status")}: {character.isAlive ? t("game.alive") : t("game.dead")}
           </small>
         </div>
         <LanguageToggle />
@@ -132,10 +127,7 @@ export default function GameRoom() {
 
         <div className="col-9 d-flex flex-column p-0">
           <ChatBox messages={messages} />
-          <CommandInput
-            onSend={handleSendMessage}
-            disabled={!character.isAlive}
-          />
+          <CommandInput onSend={handleSendMessage} disabled={!character.isAlive} />
         </div>
       </div>
     </div>
