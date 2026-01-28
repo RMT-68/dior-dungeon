@@ -452,6 +452,13 @@ class GameHandler {
         staminaCost: staminaCost,
       };
 
+      console.log(`[ACTION] ${player.username} action:`, {
+        type: actionType,
+        skillName: newAction.skillName,
+        skillAmount: newAction.skillAmount,
+        skillPower: newAction.skillPower,
+      });
+
       // Re-fetch room to get latest game_state (prevent race condition)
       const freshRoom = await Room.findOne({ where: { room_code: roomCode } });
       const freshActions = freshRoom.game_state.currentTurnActions || [];
@@ -530,6 +537,17 @@ class GameHandler {
         return;
       }
 
+      console.log(
+        `[BATTLE] Round ${gameState.round} - Player actions:`,
+        playerActions.map((a) => ({
+          player: a.playerName,
+          type: a.type,
+          skill: a.skillName,
+          amount: a.skillAmount,
+          power: a.skillPower,
+        })),
+      );
+
       // Call AI to generate narration and logic
       const battleResult = await generateBattleNarration({
         theme: room.theme,
@@ -537,6 +555,20 @@ class GameHandler {
         playerActions: playerActions,
         battleState: { currentRound: gameState.round },
         language: room.language,
+      });
+
+      console.log(`[BATTLE_RESULT] Round ${gameState.round}:`, {
+        totalDamage: battleResult.enemyHP.damage,
+        enemyHPBefore: battleResult.enemyHP.previous,
+        enemyHPAfter: battleResult.enemyHP.current,
+        playerActions: battleResult.playerActions.map((a) => ({
+          player: a.playerName,
+          type: a.actionType,
+          damage: a.finalDamage,
+          heal: a.finalHeal,
+          critical: a.isCritical,
+          miss: a.isMiss,
+        })),
       });
 
       // Apply results to DB

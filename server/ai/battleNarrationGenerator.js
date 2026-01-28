@@ -10,13 +10,7 @@ const { aiHelper } = require("../helpers/aiHelper");
  * @param {string} params.language - Language for narration
  * @returns {Promise<Object>} Battle result with narration and enemy action
  */
-async function generateBattleNarration({
-  theme,
-  enemy,
-  playerActions,
-  battleState,
-  language = "en",
-}) {
+async function generateBattleNarration({ theme, enemy, playerActions, battleState, language = "en" }) {
   // Validate input
   if (!theme || !enemy || !playerActions || !battleState) {
     throw new Error("Missing required battle parameters");
@@ -127,9 +121,7 @@ Generate ONLY valid JSON:
     // Process enemy action if not defeated
     let enemyActionResult = null;
     if (!enemyDefeated && narration.enemyAction) {
-      const enemySkill = enemy.skills.find(
-        (s) => s.name === narration.enemyAction.skillUsed,
-      );
+      const enemySkill = enemy.skills.find((s) => s.name === narration.enemyAction.skillUsed);
       if (enemySkill) {
         const enemyDiceRoll = rollD20();
 
@@ -139,11 +131,7 @@ Generate ONLY valid JSON:
             skillName: enemySkill.name,
             baseDamage: enemySkill.amount,
             diceRoll: enemyDiceRoll,
-            ...calculateEnemyDamage(
-              enemySkill,
-              enemyDiceRoll,
-              enemy.skillPower,
-            ),
+            ...calculateEnemyDamage(enemySkill, enemyDiceRoll, enemy.skillPower),
             narrative: narration.enemyAction.narrative,
           };
         } else if (enemySkill.type === "healing") {
@@ -218,7 +206,9 @@ function calculateDamage(action, diceRoll) {
   }
 
   // Base damage = skill amount × skill power + dice bonus
-  let damage = action.skillAmount * action.skillPower + diceRoll / 10;
+  // Use provided skillPower or default to 2.0 if missing
+  const skillPower = action.skillPower !== undefined ? action.skillPower : 2.0;
+  let damage = action.skillAmount * skillPower + diceRoll / 10;
 
   if (isCritical) {
     damage *= 2;
@@ -238,7 +228,8 @@ function calculateDamage(action, diceRoll) {
  * Calculate healing with dice roll
  */
 function calculateHealing(action, diceRoll) {
-  const baseHeal = action.skillAmount * action.skillPower;
+  const skillPower = action.skillPower !== undefined ? action.skillPower : 2.0;
+  const baseHeal = action.skillAmount * skillPower;
   const diceBonus = diceRoll / 10;
   const finalHeal = Math.round((baseHeal + diceBonus) * 10) / 10;
 

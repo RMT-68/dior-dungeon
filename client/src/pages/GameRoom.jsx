@@ -142,6 +142,8 @@ export default function GameRoom() {
       // Note: myPlayerId should be set by join_room_success which arrives first
       const myPlayer = data.players?.find((p) => p.id === myPlayerId);
       if (myPlayer) {
+        console.log(myPlayer);
+
         updateCharacterFromPlayer(myPlayer);
       }
 
