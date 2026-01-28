@@ -1,4 +1,4 @@
-const gemini = require("../helpers/gemini");
+const { aiHelper } = require("../helpers/aiHelper");
 
 /**
  * Generate an NPC event with choices based on dungeon context
@@ -9,7 +9,12 @@ const gemini = require("../helpers/gemini");
  * @param {string} params.language - Language for event content (e.g., "en", "id", "es")
  * @returns {Promise<Object>} Generated NPC event object
  */
-async function generateNPCEvent({ theme, nodeId, playerState, language = "en" }) {
+async function generateNPCEvent({
+  theme,
+  nodeId,
+  playerState,
+  language = "en",
+}) {
   // Validate input
   if (!theme || typeof theme !== "string") {
     throw new Error("Theme is required and must be a string");
@@ -89,8 +94,8 @@ Generate ONLY valid JSON with this EXACT structure (no markdown, no code blocks,
 Remember: Generate exactly 2 choices (positive and negative). All effect values must be numbers. Make the narrative engaging and thematic.`;
 
   try {
-    // Call Gemini AI
-    const aiResponse = await gemini("gemini-3-flash-preview", prompt);
+    // Call AI (Groq primary, Gemini fallback)
+    const aiResponse = await aiHelper(prompt);
 
     // Clean the response (remove markdown code blocks if present)
     let cleanedResponse = aiResponse.trim();
@@ -123,7 +128,9 @@ Remember: Generate exactly 2 choices (positive and negative). All effect values 
  */
 function validateNPCEventStructure(npcEvent) {
   if (!npcEvent.npcName || !npcEvent.description) {
-    throw new Error("Missing required NPC event properties: npcName, description");
+    throw new Error(
+      "Missing required NPC event properties: npcName, description",
+    );
   }
 
   if (!Array.isArray(npcEvent.choices) || npcEvent.choices.length !== 2) {
@@ -137,11 +144,15 @@ function validateNPCEventStructure(npcEvent) {
     }
 
     if (!["positive", "negative"].includes(choice.id)) {
-      throw new Error(`Choice ${index + 1} must have id "positive" or "negative"`);
+      throw new Error(
+        `Choice ${index + 1} must have id "positive" or "negative"`,
+      );
     }
 
     if (!choice.outcome.narrative || !choice.outcome.effects) {
-      throw new Error(`Choice ${index + 1} outcome is missing narrative or effects`);
+      throw new Error(
+        `Choice ${index + 1} outcome is missing narrative or effects`,
+      );
     }
 
     const effects = choice.outcome.effects;
@@ -160,7 +171,12 @@ function validateNPCEventStructure(npcEvent) {
 /**
  * Create a fallback NPC event if AI generation fails
  */
-function createFallbackNPCEvent({ theme, nodeId, playerState, language = "en" }) {
+function createFallbackNPCEvent({
+  theme,
+  nodeId,
+  playerState,
+  language = "en",
+}) {
   const lowHP = playerState.hp < playerState.maxHP * 0.5;
   const lowStamina = playerState.stamina < playerState.maxStamina * 0.5;
 
@@ -176,7 +192,8 @@ function createFallbackNPCEvent({ theme, nodeId, playerState, language = "en" })
           id: "positive",
           label: "Accept the powerful healing ritual",
           outcome: {
-            narrative: "The healer channels mysterious energy. You feel rejuvenated but exhausted.",
+            narrative:
+              "The healer channels mysterious energy. You feel rejuvenated but exhausted.",
             effects: {
               hpBonus: 30,
               staminaBonus: -2,
@@ -207,7 +224,8 @@ function createFallbackNPCEvent({ theme, nodeId, playerState, language = "en" })
           id: "positive",
           label: "Help them and share supplies",
           outcome: {
-            narrative: "Working together, you both patch your wounds more effectively.",
+            narrative:
+              "Working together, you both patch your wounds more effectively.",
             effects: {
               hpBonus: 25,
               staminaBonus: 2,
@@ -238,7 +256,8 @@ function createFallbackNPCEvent({ theme, nodeId, playerState, language = "en" })
           id: "positive",
           label: "Buy the premium energy elixir",
           outcome: {
-            narrative: "The elixir courses through you, restoring your vigor significantly.",
+            narrative:
+              "The elixir courses through you, restoring your vigor significantly.",
             effects: {
               hpBonus: 5,
               staminaBonus: 6,
@@ -250,7 +269,8 @@ function createFallbackNPCEvent({ theme, nodeId, playerState, language = "en" })
           id: "negative",
           label: "Take the free water and rest",
           outcome: {
-            narrative: "A brief rest and some water restore your energy partially.",
+            narrative:
+              "A brief rest and some water restore your energy partially.",
             effects: {
               hpBonus: 8,
               staminaBonus: 4,
@@ -269,7 +289,8 @@ function createFallbackNPCEvent({ theme, nodeId, playerState, language = "en" })
           id: "positive",
           label: "Receive the powerful blessing",
           outcome: {
-            narrative: "Ancient power flows through you. Your abilities are enhanced!",
+            narrative:
+              "Ancient power flows through you. Your abilities are enhanced!",
             effects: {
               hpBonus: 10,
               staminaBonus: 4,
@@ -281,7 +302,8 @@ function createFallbackNPCEvent({ theme, nodeId, playerState, language = "en" })
           id: "negative",
           label: "Listen to their wisdom",
           outcome: {
-            narrative: "The sage's words inspire you, granting modest benefits.",
+            narrative:
+              "The sage's words inspire you, granting modest benefits.",
             effects: {
               hpBonus: 15,
               staminaBonus: 3,

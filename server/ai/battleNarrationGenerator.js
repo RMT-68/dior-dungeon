@@ -1,4 +1,4 @@
-const gemini = require("../helpers/gemini");
+const { aiHelper } = require("../helpers/aiHelper");
 
 /**
  * Generate battle narration and enemy AI response
@@ -10,7 +10,13 @@ const gemini = require("../helpers/gemini");
  * @param {string} params.language - Language for narration
  * @returns {Promise<Object>} Battle result with narration and enemy action
  */
-async function generateBattleNarration({ theme, enemy, playerActions, battleState, language = "en" }) {
+async function generateBattleNarration({
+  theme,
+  enemy,
+  playerActions,
+  battleState,
+  language = "en",
+}) {
   // Validate input
   if (!theme || !enemy || !playerActions || !battleState) {
     throw new Error("Missing required battle parameters");
@@ -107,8 +113,8 @@ Generate ONLY valid JSON:
 }`;
 
   try {
-    // Call Gemini AI
-    const aiResponse = await gemini("gemini-3-flash-preview", prompt);
+    // Call AI (Groq primary, Gemini fallback)
+    const aiResponse = await aiHelper(prompt);
 
     // Clean and parse response
     let cleaned = aiResponse
@@ -121,7 +127,9 @@ Generate ONLY valid JSON:
     // Process enemy action if not defeated
     let enemyActionResult = null;
     if (!enemyDefeated && narration.enemyAction) {
-      const enemySkill = enemy.skills.find((s) => s.name === narration.enemyAction.skillUsed);
+      const enemySkill = enemy.skills.find(
+        (s) => s.name === narration.enemyAction.skillUsed,
+      );
       if (enemySkill) {
         const enemyDiceRoll = rollD20();
 
@@ -131,7 +139,11 @@ Generate ONLY valid JSON:
             skillName: enemySkill.name,
             baseDamage: enemySkill.amount,
             diceRoll: enemyDiceRoll,
-            ...calculateEnemyDamage(enemySkill, enemyDiceRoll, enemy.skillPower),
+            ...calculateEnemyDamage(
+              enemySkill,
+              enemyDiceRoll,
+              enemy.skillPower,
+            ),
             narrative: narration.enemyAction.narrative,
           };
         } else if (enemySkill.type === "healing") {

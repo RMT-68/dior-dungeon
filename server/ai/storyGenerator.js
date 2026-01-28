@@ -1,4 +1,4 @@
-const gemini = require("../helpers/gemini");
+const { aiHelper } = require("../helpers/aiHelper");
 
 /**
  * Generate story transition between nodes
@@ -10,7 +10,13 @@ const gemini = require("../helpers/gemini");
  * @param {string} params.language - Language for narrative
  * @returns {Promise<Object>} Story transition
  */
-async function generateNodeTransition({ theme, currentNode, nextNode, partyState, language = "en" }) {
+async function generateNodeTransition({
+  theme,
+  currentNode,
+  nextNode,
+  partyState,
+  language = "en",
+}) {
   const prompt = `You are a storyteller for a ${theme} themed dungeon adventure. Generate a brief narrative transition as the party moves from one location to another.
 
 Current Location: ${currentNode.name} (${currentNode.type})
@@ -34,7 +40,7 @@ Generate ONLY valid JSON:
 }`;
 
   try {
-    const aiResponse = await gemini("gemini-3-flash-preview", prompt);
+    const aiResponse = await aiHelper(prompt);
     let cleaned = aiResponse
       .trim()
       .replace(/```json\n?/g, "")
@@ -74,7 +80,9 @@ async function generateStoryThusFar({
   // Summarize key events from game log
   const battles = gameLog.filter((e) => e.type === "battle").length;
   const npcEvents = gameLog.filter((e) => e.type === "npc_event").length;
-  const defeatedEnemies = gameLog.filter((e) => e.type === "battle" && e.result === "victory").length;
+  const defeatedEnemies = gameLog.filter(
+    (e) => e.type === "battle" && e.result === "victory",
+  ).length;
 
   const prompt = `You are a storyteller for ${dungeonName}, a ${theme} themed dungeon. Generate an engaging "story thus far" summary.
 
@@ -102,7 +110,7 @@ Generate ONLY valid JSON:
 }`;
 
   try {
-    const aiResponse = await gemini("gemini-3-flash-preview", prompt);
+    const aiResponse = await aiHelper(prompt);
     let cleaned = aiResponse
       .trim()
       .replace(/```json\n?/g, "")
@@ -113,7 +121,11 @@ Generate ONLY valid JSON:
     console.error("Error generating story thus far:", error);
     return {
       summary: `The party has progressed through ${currentNode} of ${totalNodes} locations in ${dungeonName}, defeating ${defeatedEnemies} enemies along the way.`,
-      keyMoments: [`Entered ${dungeonName}`, `Fought ${battles} battles`, `Currently at node ${currentNode}`],
+      keyMoments: [
+        `Entered ${dungeonName}`,
+        `Fought ${battles} battles`,
+        `Currently at node ${currentNode}`,
+      ],
       outlook: "challenging",
     };
   }
@@ -130,9 +142,19 @@ Generate ONLY valid JSON:
  * @param {string} params.language - Language for narrative
  * @returns {Promise<Object>} Battle summary
  */
-async function generateAfterBattleSummary({ theme, enemy, battleLog, partyState, rewards, language = "en" }) {
+async function generateAfterBattleSummary({
+  theme,
+  enemy,
+  battleLog,
+  partyState,
+  rewards,
+  language = "en",
+}) {
   const totalRounds = battleLog.length;
-  const totalDamageDealt = battleLog.reduce((sum, round) => sum + (round.totalDamage || 0), 0);
+  const totalDamageDealt = battleLog.reduce(
+    (sum, round) => sum + (round.totalDamage || 0),
+    0,
+  );
   const criticalHits = battleLog.filter((round) => round.hasCritical).length;
 
   const prompt = `You are a storyteller for a ${theme} themed dungeon. Generate an epic after-battle summary.
@@ -164,7 +186,7 @@ Generate ONLY valid JSON:
 }`;
 
   try {
-    const aiResponse = await gemini("gemini-3-flash-preview", prompt);
+    const aiResponse = await aiHelper(prompt);
     let cleaned = aiResponse
       .trim()
       .replace(/```json\n?/g, "")
@@ -192,10 +214,21 @@ Generate ONLY valid JSON:
  * @param {string} params.language - Language for narrative
  * @returns {Promise<Object>} Final game summary
  */
-async function generateFinalGameSummary({ theme, dungeonName, completeGameLog, finalStats, outcome, language = "en" }) {
+async function generateFinalGameSummary({
+  theme,
+  dungeonName,
+  completeGameLog,
+  finalStats,
+  outcome,
+  language = "en",
+}) {
   const battles = completeGameLog.filter((e) => e.type === "battle").length;
-  const victories = completeGameLog.filter((e) => e.type === "battle" && e.result === "victory").length;
-  const npcEvents = completeGameLog.filter((e) => e.type === "npc_event").length;
+  const victories = completeGameLog.filter(
+    (e) => e.type === "battle" && e.result === "victory",
+  ).length;
+  const npcEvents = completeGameLog.filter(
+    (e) => e.type === "npc_event",
+  ).length;
 
   const prompt = `You are a master storyteller concluding an epic ${theme} adventure in ${dungeonName}. Generate a memorable final summary.
 
@@ -227,7 +260,7 @@ Generate ONLY valid JSON:
 }`;
 
   try {
-    const aiResponse = await gemini("gemini-3-flash-preview", prompt);
+    const aiResponse = await aiHelper(prompt);
     let cleaned = aiResponse
       .trim()
       .replace(/```json\n?/g, "")
@@ -238,7 +271,11 @@ Generate ONLY valid JSON:
     console.error("Error generating final game summary:", error);
     return {
       summary: `The adventure in ${dungeonName} has come to an end. Through ${battles} battles and ${npcEvents} encounters, the party's ${outcome === "victory" ? "courage led them to victory" : "bravery will be remembered"}.`,
-      highlights: [`${victories} enemies defeated`, `${npcEvents} allies met`, `${outcome} achieved`],
+      highlights: [
+        `${victories} enemies defeated`,
+        `${npcEvents} allies met`,
+        `${outcome} achieved`,
+      ],
       legendStatus: outcome === "victory" ? "heroic" : "valiant",
       epitaph: `Heroes who braved the ${theme}.`,
     };

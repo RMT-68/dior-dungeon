@@ -1,4 +1,4 @@
-const gemini = require("../helpers/gemini");
+const { aiHelper } = require("../helpers/aiHelper");
 
 /**
  * Generate a character based on dungeon theme
@@ -18,8 +18,16 @@ async function generateCharacter({ theme, language = "en" }) {
   }
 
   // Randomly select a character role
-  const availableRoles = ["Warrior", "Mage", "Rogue", "Paladin", "Ranger", "Cleric"];
-  const selectedRole = availableRoles[Math.floor(Math.random() * availableRoles.length)];
+  const availableRoles = [
+    "Warrior",
+    "Mage",
+    "Rogue",
+    "Paladin",
+    "Ranger",
+    "Cleric",
+  ];
+  const selectedRole =
+    availableRoles[Math.floor(Math.random() * availableRoles.length)];
 
   // Design the prompt for AI
   const prompt = `You are a character generator for a fantasy RPG game. Generate a unique and thematic character that fits the dungeon theme provided.
@@ -78,8 +86,8 @@ Generate ONLY valid JSON with this EXACT structure (no markdown, no code blocks,
 Remember: Generate exactly 3-4 skills. All values must be numbers for HP, Stamina, and Skill Power. Character should fit the ${theme} theme.`;
 
   try {
-    // Call Gemini AI
-    const aiResponse = await gemini("gemini-3-flash-preview", prompt); //gemini-3-pro-image-preview
+    // Call AI (Groq primary, Gemini fallback)
+    const aiResponse = await aiHelper(prompt);
 
     // Clean the response (remove markdown code blocks if present)
     let cleanedResponse = aiResponse.trim();
