@@ -6,6 +6,7 @@ import { parseCommand } from "../utils/commandParser";
 import { socket } from "../socket";
 import { useLanguage } from "../context/LanguageContext";
 import LanguageToggle from "../components/LanguageToggle";
+import MusicPlayer from "../components/MusicPlayer";
 
 const USERNAME = localStorage.getItem("username") || "Warrior";
 const ROOM_ID = localStorage.getItem("roomCode") || "demo-room";
@@ -367,7 +368,10 @@ export default function GameRoom() {
               ` | Enemy: ${currentEnemy.name} (HP: ${currentEnemy.hp})`}
           </small>
         </div>
-        <LanguageToggle />
+        <div className="d-flex align-items-center gap-2">
+          <MusicPlayer />
+          <LanguageToggle />
+        </div>
       </div>
 
       <div className="flex-grow-1 d-flex overflow-hidden">

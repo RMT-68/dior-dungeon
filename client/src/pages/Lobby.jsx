@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
 import LanguageToggle from "../components/LanguageToggle";
+import MusicPlayer from "../components/MusicPlayer";
 
 export default function Lobby() {
   const navigate = useNavigate();
@@ -15,6 +16,10 @@ export default function Lobby() {
   const [roomCode, setRoomCode] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Error states
+  const [error, setError] = useState("");
+  const [modalError, setModalError] = useState("");
+
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const [theme, setTheme] = useState("");
@@ -22,23 +27,38 @@ export default function Lobby() {
   const [maxNode, setMaxNode] = useState(5);
   const [language, setLanguage] = useState(currentLang);
 
+  // Clear error after 3 seconds
+  const showError = (message, isModal = false) => {
+    if (isModal) {
+      setModalError(message);
+      setTimeout(() => setModalError(""), 3000);
+    } else {
+      setError(message);
+      setTimeout(() => setError(""), 3000);
+    }
+  };
+
   const handleCreateRoom = async () => {
     if (!username) {
-      alert("Enter your name");
+      showError(t("lobby.enterName"), true);
       return;
     }
 
     if (!theme.trim()) {
-      alert("Please enter a dungeon theme");
+      showError(t("lobby.enterTheme") || "Please enter a dungeon theme", true);
       return;
     }
 
     if (maxNode < 3) {
-      alert("Dungeon length must be at least 3 nodes");
+      showError(
+        t("lobby.minNodes") || "Dungeon length must be at least 3 nodes",
+        true,
+      );
       return;
     }
 
     setLoading(true);
+    setModalError("");
 
     try {
       const res = await fetch("http://localhost:3000/api/rooms", {
@@ -64,16 +84,15 @@ export default function Lobby() {
       navigate(`/wait?room=${createdRoomCode}&name=${username}`);
     } catch (err) {
       console.error(err);
-      alert("Failed to create room");
+      showError(t("lobby.createFailed") || "Failed to create room", true);
     } finally {
       setLoading(false);
-      setShowCreateModal(false);
     }
   };
 
   const handleJoinRoom = () => {
     if (!username || !roomCode) {
-      alert("Enter name & room code");
+      showError(t("lobby.enterNameAndCode") || "Enter name & room code");
       return;
     }
 
@@ -83,12 +102,22 @@ export default function Lobby() {
     navigate(`/wait?room=${roomCode}&name=${username}`);
   };
 
+  const handleOpenCreateModal = () => {
+    if (!username) {
+      showError(t("lobby.enterName"));
+      return;
+    }
+    setModalError("");
+    setShowCreateModal(true);
+  };
+
   return (
     <div className="vh-100 dungeon-hero d-flex flex-column">
       <nav className="navbar navbar-dark px-4">
         <div className="container-fluid d-flex justify-content-between">
           <img src="/dior-dungeon.png" alt="logo" style={{ height: 70 }} />
           <div className="d-flex align-items-center gap-3">
+            <MusicPlayer />
             <LanguageToggle />
             <button className="btn btn-dungeon">
               <span>{t("common.home")}</span>
@@ -109,11 +138,30 @@ export default function Lobby() {
 
           <div className="dungeon-form">
             <div className="dungeon-form-inner">
+              {/* Error Message */}
+              {error && (
+                <div
+                  className="alert alert-danger py-2 mb-3"
+                  style={{
+                    background: "rgba(220, 53, 69, 0.2)",
+                    border: "1px solid #dc3545",
+                    color: "#ff6b6b",
+                    fontSize: "0.85rem",
+                    borderRadius: "8px",
+                  }}
+                >
+                  ⚠️ {error}
+                </div>
+              )}
+
               <input
                 className="form-control dungeon-input"
                 placeholder={t("lobby.enterName")}
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  setError("");
+                }}
                 disabled={loading}
               />
 
@@ -121,17 +169,17 @@ export default function Lobby() {
                 className="form-control dungeon-input"
                 placeholder={t("lobby.enterRoomCode")}
                 value={roomCode}
-                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                onChange={(e) => {
+                  setRoomCode(e.target.value.toUpperCase());
+                  setError("");
+                }}
                 disabled={loading}
               />
 
               <div className="d-flex flex-column gap-3 mt-3">
                 <button
                   className="btn btn-dungeon-primary"
-                  onClick={() => {
-                    if (!username) return alert(t("lobby.enterName"));
-                    setShowCreateModal(true);
-                  }}
+                  onClick={handleOpenCreateModal}
                   disabled={loading}
                 >
                   <span>{t("lobby.create")}</span>
@@ -166,13 +214,32 @@ export default function Lobby() {
               </div>
 
               <div className="modal-body">
+                {/* Modal Error Message */}
+                {modalError && (
+                  <div
+                    className="alert alert-danger py-2 mb-3"
+                    style={{
+                      background: "rgba(220, 53, 69, 0.2)",
+                      border: "1px solid #dc3545",
+                      color: "#ff6b6b",
+                      fontSize: "0.85rem",
+                      borderRadius: "8px",
+                    }}
+                  >
+                    ⚠️ {modalError}
+                  </div>
+                )}
+
                 <label>{t("lobby.dungeonTheme")}</label>
                 <input
                   type="text"
                   className="form-control dungeon-input"
                   placeholder={t("lobby.themePlaceholder")}
                   value={theme}
-                  onChange={(e) => setTheme(e.target.value)}
+                  onChange={(e) => {
+                    setTheme(e.target.value);
+                    setModalError("");
+                  }}
                 />
 
                 <label className="mt-3">{t("lobby.difficulty")}</label>
