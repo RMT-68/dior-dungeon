@@ -175,9 +175,7 @@ class GameHandler {
       // Initialize game state with first node
       const firstNode = room.dungeon_data.nodes[0];
       const initialEnemy =
-        firstNode.type === "enemy"
-          ? room.dungeon_data.enemies.find((e) => e.id === firstNode.enemyId)
-          : null;
+        firstNode.type === "enemy" ? room.dungeon_data.enemies.find((e) => e.id === firstNode.enemyId) : null;
 
       room.game_state = {
         round: 1,
@@ -241,6 +239,61 @@ class GameHandler {
         });
       }
 
+      // Handle REST action
+      if (actionType === "rest") {
+        const diceRoll = Math.floor(Math.random() * 6) + 1; // 1d6 for stamina regen
+        const staminaRegained = diceRoll;
+        player.current_stamina = Math.min(player.character_data.maxStamina, player.current_stamina + staminaRegained);
+        await player.save();
+
+        const newAction = {
+          playerId,
+          playerName: player.username,
+          type: "rest",
+          skillName: "Rest",
+          staminaRegained: staminaRegained,
+          diceRoll: diceRoll,
+          skillPower: 0,
+        };
+
+        currentActions.push(newAction);
+        const newGameState = {
+          ...room.game_state,
+          currentTurnActions: currentActions,
+        };
+        room.game_state = newGameState;
+        await room.save();
+
+        this.io.to(roomCode).emit("player_action_update", {
+          playerId,
+          action: newAction,
+          totalActions: currentActions.length,
+        });
+
+        const playersCheck = await Player.findAll({ where: { room_id: room.id } });
+        const alivePlayers = playersCheck.filter((p) => p.is_alive);
+
+        if (currentActions.length >= alivePlayers.length) {
+          await this.resolveBattleRound(roomCode);
+        }
+        return;
+      }
+
+      // Find the skill in character data
+      const skill = player.character_data.skills.find((s) => s.name === (skillName || "Basic Attack"));
+      const staminaCost = skill ? skill.staminaCost : 1;
+
+      // Check if player has enough stamina
+      if (player.current_stamina < staminaCost) {
+        return this.socket.emit("error", {
+          message: `Not enough stamina. Required: ${staminaCost}, Have: ${player.current_stamina}`,
+        });
+      }
+
+      // Deduct stamina cost
+      player.current_stamina = Math.max(0, player.current_stamina - staminaCost);
+      await player.save();
+
       // Add action
       // Calculate Skill Power from character data
       const skillPower = player.character_data.skillPower || 1.0;
@@ -252,6 +305,7 @@ class GameHandler {
         skillName: skillName || "Basic Attack",
         skillAmount: skillAmount || 10,
         skillPower: skillPower,
+        staminaCost: staminaCost,
       };
 
       currentActions.push(newAction);
@@ -310,10 +364,7 @@ class GameHandler {
 
     // Process Enemy Action (Damage to players)
     let playersUpdated = false;
-    if (
-      battleResult.enemyAction &&
-      battleResult.enemyAction.type === "attack"
-    ) {
+    if (battleResult.enemyAction && battleResult.enemyAction.type === "attack") {
       const damage = battleResult.enemyAction.finalDamage;
       // Distribute damage (random target or all? Let's say random for now or logic in AI?)
       // The generator doesn't specify TARGET. We'll pick a random alive player.
@@ -327,29 +378,29 @@ class GameHandler {
 
         battleResult.enemyAction.targetName = target.username; // Add target info for client
       }
-    } else if (
-      battleResult.enemyAction &&
-      battleResult.enemyAction.type === "heal"
-    ) {
+    } else if (battleResult.enemyAction && battleResult.enemyAction.type === "heal") {
       // Enemy healed (already handled in enemyHP.current calculation?
       // generateBattleNarration actually updates enemyHP based on Player damage only usually.
       // Let's check logic. The generator calculates "newEnemyHP" from player attacks.
       // It generates enemyAction BUT doesn't apply it to the `newEnemyHP` it returns if it's a heal.
       // We should apply it here if it's a heal.
       if (battleResult.enemyAction.healAmount) {
-        updatedEnemy.hp = Math.min(
-          updatedEnemy.maxHP,
-          updatedEnemy.hp + battleResult.enemyAction.healAmount,
-        );
+        updatedEnemy.hp = Math.min(updatedEnemy.maxHP, updatedEnemy.hp + battleResult.enemyAction.healAmount);
       }
     }
 
+    // Regenerate stamina for all alive players (+1 per round)
+    const updatedPlayers = players.map((p) => {
+      if (p.is_alive) {
+        p.current_stamina = Math.min(p.character_data.maxStamina, p.current_stamina + 1);
+      }
+      return p;
+    });
+    await Promise.all(updatedPlayers.map((p) => p.save()));
+
     // Update Game State
     const nextRound = gameState.round + 1;
-    const newLogs = [
-      ...gameState.logs,
-      { round: gameState.round, narrative: battleResult.narrative },
-    ];
+    const newLogs = [...gameState.logs, { round: gameState.round, narrative: battleResult.narrative }];
 
     // Check Victory/Defeat
     let battleStatus = "ongoing";
@@ -364,9 +415,7 @@ class GameHandler {
         round: gameState.round,
       };
     }
-    const anyAlive = (
-      await Player.findAll({ where: { room_id: room.id } })
-    ).some((p) => p.is_alive);
+    const anyAlive = (await Player.findAll({ where: { room_id: room.id } })).some((p) => p.is_alive);
     if (!anyAlive) {
       battleStatus = "defeat";
       adventureLogObj = {
@@ -477,12 +526,19 @@ class GameHandler {
         language: room.language,
       });
 
+      // Regenerate half stamina for all players on node transition
+      await Promise.all(
+        players.map(async (p) => {
+          const staminaRegen = Math.ceil(p.character_data.maxStamina / 2);
+          p.current_stamina = Math.min(p.character_data.maxStamina, p.current_stamina + staminaRegen);
+          return p.save();
+        }),
+      );
+
       // Update State
       room.current_node_index = nextIndex;
       const newEnemy =
-        nextNode.type === "enemy"
-          ? room.dungeon_data.enemies.find((e) => e.id === nextNode.enemyId)
-          : null;
+        nextNode.type === "enemy" ? room.dungeon_data.enemies.find((e) => e.id === nextNode.enemyId) : null;
 
       room.game_state = {
         ...room.game_state,
@@ -526,10 +582,7 @@ class GameHandler {
     // Let's log it now as 'npc_event'
     room.game_state = {
       ...room.game_state,
-      adventure_log: [
-        ...(room.game_state.adventure_log || []),
-        { type: "npc_event", npc: event.npcName },
-      ],
+      adventure_log: [...(room.game_state.adventure_log || []), { type: "npc_event", npc: event.npcName }],
     };
     await room.save();
   }
