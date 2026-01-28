@@ -13,6 +13,7 @@ class GameHandler {
   constructor(io, socket) {
     this.io = io;
     this.socket = socket;
+    this.actionTimers = new Map(); // Track timers: "roomCode:playerId" -> timeoutId
 
     // Register event listeners
     socket.on("join_room", this.joinRoom.bind(this));
@@ -83,11 +84,11 @@ class GameHandler {
         // Generate Story Thus Far for joining player
         try {
           const history = room.game_state.adventure_log || [];
-          const players = await Player.findAll({ where: { room_id: room.id } });
-          const avgHP = Math.round(players.reduce((sum, p) => sum + p.current_hp, 0) / players.length);
+          const playersInRoom = await Player.findAll({ where: { room_id: room.id } });
+          const avgHP = Math.round(playersInRoom.reduce((sum, p) => sum + p.current_hp, 0) / playersInRoom.length);
           const partyState = {
-            playerCount: players.length,
-            aliveCount: players.filter((p) => p.is_alive).length,
+            playerCount: playersInRoom.length,
+            aliveCount: playersInRoom.filter((p) => p.is_alive).length,
             averageHP: avgHP,
           };
 
@@ -230,6 +231,13 @@ class GameHandler {
         return this.socket.emit("error", { message: "Not in battle" });
       }
 
+      // Clear action timer for this player
+      const timerKey = `${roomCode}:${playerId}`;
+      if (this.actionTimers.has(timerKey)) {
+        clearTimeout(this.actionTimers.get(timerKey));
+        this.actionTimers.delete(timerKey);
+      }
+
       // Simple turn logic: Accumulate actions until all alive players have acted
       // Check if player already acted this round
       const currentActions = room.game_state.currentTurnActions || [];
@@ -238,6 +246,11 @@ class GameHandler {
         return this.socket.emit("error", {
           message: "You have already acted this turn",
         });
+      }
+
+      // If this is the first action in this round, start action timers for all players
+      if (currentActions.length === 0) {
+        this.startActionTimers(roomCode, 30000);
       }
 
       // Handle REST action
@@ -334,6 +347,16 @@ class GameHandler {
       if (currentActions.length >= alivePlayers.length) {
         // Resolve Turn
         await this.resolveBattleRound(roomCode);
+      } else {
+        // Emit waiting state - show who has acted and who hasn't
+        const playersWhoActed = currentActions.map((a) => a.playerId);
+        const playersStillWaiting = alivePlayers.filter((p) => !playersWhoActed.includes(p.id));
+
+        this.io.to(roomCode).emit("waiting_for_players", {
+          actedCount: currentActions.length,
+          totalCount: alivePlayers.length,
+          waitingFor: playersStillWaiting.map((p) => ({ id: p.id, username: p.username })),
+        });
       }
     } catch (error) {
       console.error("Player action error:", error);
@@ -390,13 +413,12 @@ class GameHandler {
     }
 
     // Regenerate stamina for all alive players (+1 per round)
-    const updatedPlayers = players.map((p) => {
+    players.forEach((p) => {
       if (p.is_alive) {
         p.current_stamina = Math.min(p.character_data.maxStamina, p.current_stamina + 1);
       }
-      return p;
     });
-    await Promise.all(updatedPlayers.map((p) => p.save()));
+    await Promise.all(players.map((p) => p.save()));
 
     // Update Game State
     const nextRound = gameState.round + 1;
@@ -449,6 +471,25 @@ class GameHandler {
       battleStatus: battleStatus,
       players: await Player.findAll({ where: { room_id: room.id } }), // Send updated player states
     });
+
+    // Clear all action timers for this room
+    const players_db = await Player.findAll({ where: { room_id: room.id } });
+    players_db.forEach((p) => {
+      const timerKey = `${roomCode}:${p.id}`;
+      if (this.actionTimers.has(timerKey)) {
+        clearTimeout(this.actionTimers.get(timerKey));
+        this.actionTimers.delete(timerKey);
+      }
+    });
+    // Note: Timers will be restarted when first player acts in next round
+
+    // Emit round start event for ongoing battles (clients will show "Round X started")
+    if (battleStatus === "ongoing") {
+      this.io.to(roomCode).emit("round_started", {
+        round: nextRound,
+        narrative: "A new round begins. Prepare your actions!",
+      });
+    }
 
     if (battleStatus === "victory") {
       // Handle Victory Logic (XP, gold? simply wait for next node)
@@ -698,6 +739,98 @@ class GameHandler {
   async handleDisconnect() {
     // Handle cleanup
     console.log(`Client ${this.socket.id} disconnected`);
+  }
+
+  // --- Helper Methods ---
+
+  startActionTimers(roomCode, timeoutMs) {
+    // Set timer for each player to auto-submit rest action if they don't act
+    Room.findOne({ where: { room_code: roomCode } }).then((room) => {
+      Player.findAll({ where: { room_id: room.id } }).then((players) => {
+        players.forEach((player) => {
+          const timerKey = `${roomCode}:${player.id}`;
+          const timeoutId = setTimeout(async () => {
+            // Auto-submit rest action for this player
+            await this.autoSubmitRestAction(roomCode, player.id);
+          }, timeoutMs);
+          this.actionTimers.set(timerKey, timeoutId);
+        });
+
+        // Notify clients that action timers have started
+        this.io.to(roomCode).emit("timer_started", {
+          timeoutMs: timeoutMs,
+          timeoutSeconds: Math.floor(timeoutMs / 1000),
+          players: players.map((p) => ({ id: p.id, username: p.username })),
+        });
+      });
+    });
+  }
+
+  async autoSubmitRestAction(roomCode, playerId) {
+    try {
+      const room = await Room.findOne({ where: { room_code: roomCode } });
+      if (!room || room.status !== "playing") return;
+
+      const player = await Player.findByPk(playerId);
+      if (!player) return;
+
+      // Check if player already acted
+      const currentActions = room.game_state.currentTurnActions || [];
+      const alreadyActed = currentActions.find((a) => a.playerId === playerId);
+      if (alreadyActed) return;
+
+      // Auto-submit rest action
+      const diceRoll = Math.floor(Math.random() * 6) + 1;
+      const staminaRegained = diceRoll;
+      player.current_stamina = Math.min(player.character_data.maxStamina, player.current_stamina + staminaRegained);
+      await player.save();
+
+      const newAction = {
+        playerId,
+        playerName: player.username,
+        type: "rest",
+        skillName: "Rest",
+        staminaRegained: staminaRegained,
+        diceRoll: diceRoll,
+        skillPower: 0,
+        auto: true, // Flag to indicate auto-submitted action
+      };
+
+      currentActions.push(newAction);
+      room.game_state = {
+        ...room.game_state,
+        currentTurnActions: currentActions,
+      };
+      await room.save();
+
+      // Broadcast auto action
+      this.io.to(roomCode).emit("player_action_update", {
+        playerId,
+        action: newAction,
+        totalActions: currentActions.length,
+        auto: true,
+      });
+
+      // Notify room that player action timed out
+      this.io.to(roomCode).emit("action_timeout", {
+        playerId,
+        playerName: player.username,
+        autoAction: "rest",
+        staminaRegained: staminaRegained,
+        diceRoll: diceRoll,
+      });
+
+      // Check if all alive players have acted
+      const players = await Player.findAll({ where: { room_id: room.id } });
+      const alivePlayers = players.filter((p) => p.is_alive);
+
+      if (currentActions.length >= alivePlayers.length) {
+        // Resolve the battle round
+        await this.resolveBattleRound(roomCode);
+      }
+    } catch (error) {
+      console.error("Auto-submit rest action error:", error);
+    }
   }
 }
 
