@@ -28,11 +28,11 @@ class GameHandler {
 
   // --- Event Handlers ---
 
-  async joinRoom({ roomCode, username }) {
+  async joinRoom({ roomCode, playerId, username }) {
     try {
       // Prevent double join from same socket
-      if (this.socket.data.roomCode === roomCode && this.socket.data.username === username) {
-        console.log(`[JOIN] Player ${username} already in room ${roomCode}, ignoring duplicate join`);
+      if (this.socket.data.roomCode === roomCode && this.socket.data.playerId === playerId) {
+        console.log(`[JOIN] Player ${playerId} already in room ${roomCode}, ignoring duplicate join`);
         return; // Already joined, ignore
       }
 
@@ -49,25 +49,44 @@ class GameHandler {
         });
       }
 
-      // Check if player already exists in room (for reconnection)
-      let player = await Player.findOne({
-        where: { room_id: room.id, username },
-      });
+      // Determine which lookup to use: playerId for reconnection, username for new player
+      let player;
+      let isReconnecting = false;
+
+      if (playerId) {
+        // Try to find by playerId (reconnection)
+        player = await Player.findByPk(playerId);
+        if (player && player.room_id !== room.id) {
+          // Player exists but in wrong room
+          return this.socket.emit("error", {
+            message: "This player ID belongs to a different room",
+          });
+        }
+        isReconnecting = !!player;
+      } else if (username) {
+        // Try to find by username (new join or reconnect by username)
+        player = await Player.findOne({
+          where: { room_id: room.id, username },
+        });
+      }
 
       if (player) {
         // Player reconnecting: update socket ID (always allow)
+        console.log(`[RECONNECT] Player ${player.id} (${player.username}) reconnecting to room ${roomCode}`);
         player.socket_id = this.socket.id;
         await player.save();
       } else {
         // New player joining - reject if game in progress
         if (room.status === "playing") {
+          console.log(`[JOIN_BLOCKED] New player tried to join playing game ${roomCode}`);
           return this.socket.emit("error", {
             message: "Cannot join a game already in progress. Wait for it to finish.",
           });
         }
 
+        console.log(`[JOIN_NEW] New player ${username} joining room ${roomCode}`);
         player = await Player.create({
-          username,
+          username: username || "Warrior",
           socket_id: this.socket.id,
           room_id: room.id,
           is_ready: false,
@@ -87,13 +106,13 @@ class GameHandler {
       this.socket.join(roomCode);
       this.socket.data.roomCode = roomCode;
       this.socket.data.playerId = player.id;
-      this.socket.data.username = username;
+      this.socket.data.username = player.username;
 
       // Emit player ID back to client
       this.socket.emit("join_room_success", {
         playerId: player.id,
         roomCode: roomCode,
-        username: username,
+        username: player.username,
         isHost: room.host_id === player.id,
       });
 
@@ -105,20 +124,60 @@ class GameHandler {
       });
 
       if (room.status === "playing") {
-        // Generate Story Thus Far for joining player
+        // Broadcast reconnection message to other players
+        this.io.to(roomCode).emit("player_reconnected", {
+          playerId: player.id,
+          username: player.username,
+        });
+
+        console.log(`[RECONNECT_SYNC] Syncing game state for player ${player.username} (ID: ${player.id})`);
+
+        // Fetch all current players in room
+        const updatedPlayers = await Player.findAll({
+          where: { room_id: room.id },
+        });
+
+        // Send complete game state in single event
+        this.socket.emit("game_state_sync", {
+          playerId: player.id,
+          room: {
+            id: room.id,
+            room_code: room.room_code,
+            status: room.status,
+            theme: room.theme,
+            language: room.language,
+            current_node_index: room.current_node_index,
+            host_id: room.host_id,
+          },
+          dungeon: room.dungeon_data,
+          gameState: {
+            round: room.game_state.round,
+            currentNode: room.game_state.currentNode,
+            currentEnemy: room.game_state.currentEnemy,
+            currentTurnActions: room.game_state.currentTurnActions || [],
+            currentNPCEvent: room.game_state.currentNPCEvent || null,
+            npcChoosingPlayerId: room.game_state.npcChoosingPlayerId || null,
+            adventureLog: room.game_state.adventure_log || [],
+          },
+          players: updatedPlayers,
+          timestamp: new Date().toISOString(),
+        });
+
+        console.log(
+          `[RECONNECT_SYNC] Synced for player ${player.id}: Round ${room.game_state.round}, Node: ${room.game_state.currentNode?.id}`,
+        );
+
+        // Generate and send story summary for context
         try {
           const history = room.game_state.adventure_log || [];
-          const playersInRoom = await Player.findAll({
-            where: { room_id: room.id },
-          });
-          const avgHP =
-            playersInRoom.length > 0
-              ? Math.round(playersInRoom.reduce((sum, p) => sum + p.current_hp, 0) / playersInRoom.length)
-              : 0;
           const partyState = {
-            playerCount: playersInRoom.length,
-            aliveCount: playersInRoom.filter((p) => p.is_alive).length,
-            averageHP: avgHP,
+            playerCount: updatedPlayers.length,
+            aliveCount: updatedPlayers.filter((p) => p.is_alive).length,
+            averageHP: Math.round(
+              updatedPlayers.length > 0
+                ? updatedPlayers.reduce((sum, p) => sum + p.current_hp, 0) / updatedPlayers.length
+                : 0,
+            ),
           };
 
           const summary = await generateStoryThusFar({
@@ -135,51 +194,9 @@ class GameHandler {
         } catch (e) {
           console.error("Error generating summary on join:", e);
         }
-
-        // Reconnection: Sync Game State to the user
-        const updatedPlayers = await Player.findAll({
-          where: { room_id: room.id },
-        });
-
-        this.socket.emit("game_start", {
-          room,
-          players: updatedPlayers,
-          dungeon: room.dungeon_data,
-          currentNode: room.game_state.currentNode,
-          currentEnemy: room.game_state.currentEnemy,
-        });
-
-        // Restore specific scene state
-        if (room.game_state.currentNPCEvent) {
-          const choosingPlayer = updatedPlayers.find((p) => p.id === room.game_state.npcChoosingPlayerId);
-          this.socket.emit("npc_event", {
-            event: room.game_state.currentNPCEvent,
-            choosingPlayerId: room.game_state.npcChoosingPlayerId,
-            choosingPlayerName: choosingPlayer ? choosingPlayer.username : "Unknown",
-          });
-        } else if (room.game_state.currentEnemy) {
-          this.socket.emit("round_started", {
-            round: room.game_state.round,
-            narrative: "Resuming battle...",
-          });
-
-          const currentActions = room.game_state.currentTurnActions || [];
-          const alivePlayers = updatedPlayers.filter((p) => p.is_alive);
-          const playersWhoActed = currentActions.map((a) => a.playerId);
-          const playersStillWaiting = alivePlayers.filter((p) => !playersWhoActed.includes(p.id));
-
-          this.socket.emit("waiting_for_players", {
-            actedCount: currentActions.length,
-            totalCount: alivePlayers.length,
-            waitingFor: playersStillWaiting.map((p) => ({
-              id: p.id,
-              username: p.username,
-            })),
-          });
-        }
       }
 
-      console.log(`Player ${username} joined room ${roomCode}`);
+      console.log(`Player ${player.username} (ID: ${player.id}) joined room ${roomCode}`);
     } catch (error) {
       console.error("Join room error:", error);
       this.socket.emit("error", { message: "Failed to join room" });
@@ -951,7 +968,7 @@ class GameHandler {
 
       // Remove player from room
       await Player.destroy({ where: { id: playerId } });
-      console.log(`Player ${username} left room ${roomCode}`);
+      console.log(`Player ${username} (ID: ${playerId}) left room ${roomCode}`);
 
       // Notify remaining players
       const remainingPlayers = await Player.findAll({ where: { room_id: room.id } });
@@ -969,7 +986,7 @@ class GameHandler {
   async handleDisconnect() {
     try {
       const { roomCode, playerId, username } = this.socket.data;
-      console.log(`Client ${this.socket.id} disconnected (Player: ${username}, Room: ${roomCode})`);
+      console.log(`Client ${this.socket.id} disconnected (Player: ${username} ID: ${playerId}, Room: ${roomCode})`);
 
       if (!roomCode || !playerId) return;
 
@@ -1175,6 +1192,61 @@ class GameHandler {
       }
     } catch (error) {
       console.error("Auto-submit rest action error:", error);
+    }
+  }
+  /**
+   * Fetch complete game state for a room
+   * @param {Room} room - The room object
+   * @returns {Object} Complete game state snapshot
+   */
+  async fetchGameStateSnapshot(room) {
+    try {
+      const players = await Player.findAll({
+        where: { room_id: room.id },
+      });
+
+      return {
+        room: {
+          id: room.id,
+          room_code: room.room_code,
+          status: room.status,
+          theme: room.theme,
+          language: room.language,
+          current_node_index: room.current_node_index,
+          host_id: room.host_id,
+          created_at: room.createdAt,
+        },
+        dungeon: room.dungeon_data,
+        gameState: {
+          round: room.game_state.round,
+          currentNode: room.game_state.currentNode,
+          currentEnemy: room.game_state.currentEnemy,
+          currentTurnActions: room.game_state.currentTurnActions || [],
+          currentNPCEvent: room.game_state.currentNPCEvent || null,
+          npcChoosingPlayerId: room.game_state.npcChoosingPlayerId || null,
+          adventureLog: room.game_state.adventure_log || [],
+          logs: room.game_state.logs || [],
+        },
+        players: players.map((p) => ({
+          id: p.id,
+          username: p.username,
+          socket_id: p.socket_id,
+          is_ready: p.is_ready,
+          is_alive: p.is_alive,
+          current_hp: p.current_hp,
+          current_stamina: p.current_stamina,
+          character_data: p.character_data,
+          created_at: p.createdAt,
+        })),
+        metadata: {
+          fetchedAt: new Date().toISOString(),
+          totalPlayers: players.length,
+          alivePlayers: players.filter((p) => p.is_alive).length,
+        },
+      };
+    } catch (error) {
+      console.error("Error fetching game state snapshot:", error);
+      throw error;
     }
   }
 }

@@ -21,10 +21,12 @@ const ACTION_ICONS = {
 export default function GameRoom() {
   const { t } = useLanguage();
   const hasJoinedRef = useRef(false);
+  const myPlayerIdRef = useRef(null); // Track latest myPlayerId
 
   // Read from localStorage inside component to get fresh values
   const USERNAME = localStorage.getItem("username") || "Warrior";
   const ROOM_ID = localStorage.getItem("roomCode") || "demo-room";
+  const PLAYER_ID = localStorage.getItem("playerId") || null; // Get playerId from localStorage
 
   const [messages, setMessages] = useState([{ id: 1, type: "system", text: "Waiting for dungeon master..." }]);
 
@@ -32,11 +34,12 @@ export default function GameRoom() {
   const [currentNode, setCurrentNode] = useState(null);
   const [currentEnemy, setCurrentEnemy] = useState(null);
   const [currentRound, setCurrentRound] = useState(1);
-  const [gameStatus, setGameStatus] = useState("waiting"); // waiting, playing, npc_event, battle, finished
+  const [gameStatus, setGameStatus] = useState("waiting"); // waiting, playing, npc_event, battle, finished, disconnected
+  const [isDisconnected, setIsDisconnected] = useState(false); // Track disconnection state
 
   // Player & Game State
   const [players, setPlayers] = useState([]);
-  const [myPlayerId, setMyPlayerId] = useState(null);
+  const [myPlayerId, setMyPlayerId] = useState(PLAYER_ID); // Initialize with stored playerId
   const [isHost, setIsHost] = useState(false);
 
   // NPC Event State
@@ -78,20 +81,31 @@ export default function GameRoom() {
     // Prevent double join
     if (!hasJoinedRef.current) {
       hasJoinedRef.current = true;
-      socket.emit("join_room", {
-        roomCode: ROOM_ID,
-        username: USERNAME,
-      });
+      // If we have a playerId from localStorage, use it for reconnection; otherwise use username for new player
+      if (PLAYER_ID) {
+        socket.emit("join_room", {
+          roomCode: ROOM_ID,
+          playerId: PLAYER_ID,
+        });
+      } else {
+        socket.emit("join_room", {
+          roomCode: ROOM_ID,
+          username: USERNAME,
+        });
+      }
     }
 
     // ============ JOIN & ROOM EVENTS ============
-    socket.on("join_room_success", (data) => {
+    const handleJoinSuccess = (data) => {
+      myPlayerIdRef.current = data.playerId; // Update ref with latest playerId
       setMyPlayerId(data.playerId);
       setIsHost(data.isHost);
+      // Store playerId in localStorage for future reconnections
+      localStorage.setItem("playerId", data.playerId);
       addMessage("system", `Welcome ${data.username}! You joined room ${data.roomCode}`);
-    });
+    };
 
-    socket.on("room_update", (data) => {
+    const handleRoomUpdate = (data) => {
       if (data.players) {
         setPlayers(data.players);
         const me = data.players.find((p) => p.id === myPlayerId);
@@ -107,10 +121,10 @@ export default function GameRoom() {
           });
         }
       }
-    });
+    };
 
     // ============ GAME START ============
-    socket.on("game_start", (data) => {
+    const handleGameStart = (data) => {
       setGameStatus("playing");
       setDungeon(data.dungeon);
       setCurrentNode(data.currentNode);
@@ -124,25 +138,69 @@ export default function GameRoom() {
       if (data.currentEnemy) {
         addMessage("enemy", `👹 ${data.currentEnemy.name} appears! (HP: ${data.currentEnemy.hp})`, ACTION_ICONS.attack);
       }
-    });
+    };
+
+    // ============ GAME STATE SYNC (Mid-game reconnection) ============
+    const handleGameStateSync = (data) => {
+      console.log("Game State Sync Received:", { round: data.gameState.round, node: data.gameState.currentNode?.id });
+
+      // Restore all game state
+      setGameStatus("playing");
+      setDungeon(data.dungeon);
+      setCurrentRound(data.gameState.round);
+      setCurrentNode(data.gameState.currentNode);
+      setCurrentEnemy(data.gameState.currentEnemy);
+      setPlayers(data.players);
+
+      // Restore character info from player data
+      const myCharacter = data.players.find((p) => p.id === myPlayerId);
+      if (myCharacter) {
+        setCharacter({
+          name: myCharacter.username,
+          hp: myCharacter.current_hp,
+          maxHp: myCharacter.character_data?.hp || 100,
+          stamina: myCharacter.current_stamina,
+          maxStamina: myCharacter.character_data?.maxStamina || 100,
+          isAlive: myCharacter.is_alive,
+          skills: myCharacter.character_data?.skills || [],
+        });
+      }
+
+      // Determine game status based on state
+      if (data.gameState.currentNPCEvent) {
+        setGameStatus("npc_event");
+        setNpcEvent(data.gameState.currentNPCEvent);
+        setNpcChoosingPlayerId(data.gameState.npcChoosingPlayerId);
+        addMessage("system", `🔄 Rejoined at NPC event. Waiting for choice...`);
+      } else if (data.gameState.currentEnemy && data.gameState.currentEnemy.hp > 0) {
+        setGameStatus("battle");
+        addMessage("system", `🔄 Rejoined during battle! Round ${data.gameState.round}`);
+        addMessage("narration", `👹 ${data.gameState.currentEnemy.name} (HP: ${data.gameState.currentEnemy.hp})`);
+      } else {
+        addMessage("system", `🔄 Rejoined the game! You're at ${data.gameState.currentNode?.name}`);
+      }
+
+      addMessage("system", `📍 Location: ${data.gameState.currentNode?.name || "Unknown"}`);
+      addMessage("system", `👥 Party: ${data.metadata.alivePlayers}/${data.metadata.totalPlayers} alive`);
+    };
 
     // ============ BATTLE EVENTS ============
-    socket.on("round_started", (data) => {
+    const handleRoundStarted = (data) => {
       setCurrentRound(data.round);
       setGameStatus("battle");
       addMessage("system", `⚔️ Round ${data.round}: ${data.narrative}`);
-    });
+    };
 
-    socket.on("player_action_update", (data) => {
+    const handlePlayerActionUpdate = (data) => {
       const actionIcon = data.action.type === "heal" ? ACTION_ICONS.heal : ACTION_ICONS.attack;
       const actionText =
         data.action.type === "rest"
           ? `${data.action.playerName} rests and recovers ${data.action.staminaRegained} stamina`
           : `${data.action.playerName} uses ${data.action.skillName}!`;
       addMessage("action", actionText, actionIcon, { playerId: data.playerId });
-    });
+    };
 
-    socket.on("battle_result", (data) => {
+    const handleBattleResult = (data) => {
       // Main battle narrative
       addMessage("narration", data.narrative);
 
@@ -171,18 +229,22 @@ export default function GameRoom() {
       if (data.players) {
         setPlayers(data.players);
       }
-    });
+    };
 
-    socket.on("battle_summary", (data) => {
+    const handleBattleSummary = (data) => {
       setBattleSummary(data);
       addMessage("victory", `🎉 Victory! ${data.summary}`, ACTION_ICONS.victory);
       if (data.quote) {
         addMessage("quote", `"${data.quote}"`);
       }
-    });
+    };
 
     // ============ NPC EVENTS ============
-    socket.on("npc_event", (data) => {
+    const handleNpcEvent = (data) => {
+      console.log("NPC Event Received:", {
+        myPlayerId: myPlayerIdRef.current,
+        choosingPlayerId: data.choosingPlayerId,
+      });
       setGameStatus("npc_event");
       setNpcEvent(data.event);
       setNpcChoosingPlayerId(data.choosingPlayerId);
@@ -193,19 +255,19 @@ export default function GameRoom() {
       data.event.choices?.forEach((choice, idx) => {
         addMessage("choice", `  ${idx + 1}. ${choice.label}`);
       });
-    });
+    };
 
-    socket.on("npc_resolution", (data) => {
+    const handleNpcResolution = (data) => {
       setNpcEvent(null);
       setNpcChoosingPlayerId(null);
       addMessage("narration", `📜 ${data.narrative}`);
       if (data.effects) {
         addMessage("effect", `Effects: ${JSON.stringify(data.effects)}`);
       }
-    });
+    };
 
     // ============ NODE TRANSITION ============
-    socket.on("node_transition", (data) => {
+    const handleNodeTransition = (data) => {
       setCurrentNode(data.currentNode);
       setCurrentEnemy(data.currentEnemy);
       addMessage("narration", `📍 ${data.narrative}`);
@@ -220,10 +282,10 @@ export default function GameRoom() {
           ACTION_ICONS.attack,
         );
       }
-    });
+    };
 
     // ============ GAME OVER ============
-    socket.on("game_over", (data) => {
+    const handleGameOver = (data) => {
       setGameStatus("finished");
       setGameOverData(data);
 
@@ -237,44 +299,103 @@ export default function GameRoom() {
       if (data.epitaph) {
         addMessage("epitaph", `📜 "${data.epitaph}"`);
       }
-    });
+    };
 
     // ============ WAITING & TIMEOUT ============
-    socket.on("waiting_for_players", (data) => {
+    const handleWaitingForPlayers = (data) => {
       addMessage("system", `Waiting for ${data.waitingOn?.length || 0} players to act...`);
-    });
+    };
 
-    socket.on("action_timeout", (data) => {
+    const handleActionTimeout = (data) => {
       addMessage("warning", `⏰ ${data.playerName} timed out and will defend!`);
-    });
+    };
 
     // ============ STORY & MISC ============
-    socket.on("story_summary", (data) => {
+    const handleStorySummary = (data) => {
       addMessage("story", `📖 ${data.summary}`);
-    });
+    };
 
-    socket.on("error", (err) => {
+    const handleError = (err) => {
       addMessage("error", `❌ ${err.message}`);
-    });
+    };
+
+    // ============ CONNECTION EVENTS ============
+    const handleDisconnect = () => {
+      console.log("Socket disconnected");
+      setIsDisconnected(true);
+      addMessage("warning", "⚠️ Connection lost. Attempting to reconnect...");
+    };
+
+    const handleConnect = () => {
+      console.log("Socket connected");
+      // Auto-rejoin the room after reconnection
+      if (hasJoinedRef.current && ROOM_ID) {
+        const CURRENT_PLAYER_ID = localStorage.getItem("playerId");
+        if (CURRENT_PLAYER_ID) {
+          socket.emit("join_room", {
+            roomCode: ROOM_ID,
+            playerId: CURRENT_PLAYER_ID,
+          });
+        } else {
+          const CURRENT_USERNAME = localStorage.getItem("username");
+          socket.emit("join_room", {
+            roomCode: ROOM_ID,
+            username: CURRENT_USERNAME,
+          });
+        }
+        addMessage("system", "🔗 Reconnected! Syncing game state...");
+      }
+      setIsDisconnected(false);
+    };
+
+    const handlePlayerReconnected = (data) => {
+      if (data.playerId !== myPlayerId) {
+        addMessage("system", `✅ ${data.username} has reconnected to the game!`);
+      }
+    };
+
+    socket.on("join_room_success", handleJoinSuccess);
+    socket.on("room_update", handleRoomUpdate);
+    socket.on("game_start", handleGameStart);
+    socket.on("game_state_sync", handleGameStateSync);
+    socket.on("round_started", handleRoundStarted);
+    socket.on("player_action_update", handlePlayerActionUpdate);
+    socket.on("battle_result", handleBattleResult);
+    socket.on("battle_summary", handleBattleSummary);
+    socket.on("npc_event", handleNpcEvent);
+    socket.on("npc_resolution", handleNpcResolution);
+    socket.on("node_transition", handleNodeTransition);
+    socket.on("game_over", handleGameOver);
+    socket.on("waiting_for_players", handleWaitingForPlayers);
+    socket.on("action_timeout", handleActionTimeout);
+    socket.on("story_summary", handleStorySummary);
+    socket.on("error", handleError);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("connect", handleConnect);
+    socket.on("player_reconnected", handlePlayerReconnected);
 
     return () => {
-      socket.off("join_room_success");
-      socket.off("room_update");
-      socket.off("game_start");
-      socket.off("round_started");
-      socket.off("player_action_update");
-      socket.off("battle_result");
-      socket.off("battle_summary");
-      socket.off("npc_event");
-      socket.off("npc_resolution");
-      socket.off("node_transition");
-      socket.off("game_over");
-      socket.off("waiting_for_players");
-      socket.off("action_timeout");
-      socket.off("story_summary");
-      socket.off("error");
+      socket.off("join_room_success", handleJoinSuccess);
+      socket.off("room_update", handleRoomUpdate);
+      socket.off("game_start", handleGameStart);
+      socket.off("game_state_sync", handleGameStateSync);
+      socket.off("round_started", handleRoundStarted);
+      socket.off("player_action_update", handlePlayerActionUpdate);
+      socket.off("battle_result", handleBattleResult);
+      socket.off("battle_summary", handleBattleSummary);
+      socket.off("npc_event", handleNpcEvent);
+      socket.off("npc_resolution", handleNpcResolution);
+      socket.off("node_transition", handleNodeTransition);
+      socket.off("game_over", handleGameOver);
+      socket.off("waiting_for_players", handleWaitingForPlayers);
+      socket.off("action_timeout", handleActionTimeout);
+      socket.off("story_summary", handleStorySummary);
+      socket.off("error", handleError);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("connect", handleConnect);
+      socket.off("player_reconnected", handlePlayerReconnected);
     };
-  }, [myPlayerId]);
+  }, []); // Empty dependency array - set up listeners once on mount
 
   // ============ ACTION HANDLERS ============
   const handleAction = (actionType, skill = null) => {
@@ -290,6 +411,24 @@ export default function GameRoom() {
 
   const handleNpcChoice = (choiceId) => {
     socket.emit("npc_choice", { choiceId });
+  };
+
+  const handleRejoin = () => {
+    setIsDisconnected(false);
+    socket.disconnect();
+    socket.connect();
+    const CURRENT_PLAYER_ID = localStorage.getItem("playerId");
+    if (CURRENT_PLAYER_ID) {
+      socket.emit("join_room", {
+        roomCode: ROOM_ID,
+        playerId: CURRENT_PLAYER_ID,
+      });
+    } else {
+      socket.emit("join_room", {
+        roomCode: ROOM_ID,
+        username: USERNAME,
+      });
+    }
   };
 
   const handleNextNode = () => {
@@ -324,6 +463,24 @@ export default function GameRoom() {
   // ============ RENDER ============
   return (
     <div className="vh-100 d-flex flex-column bg-dark text-light">
+      {/* Disconnection Overlay */}
+      {isDisconnected && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-75 d-flex align-items-center justify-content-center"
+          style={{ zIndex: 9999 }}
+        >
+          <div className="card bg-danger p-4 text-center" style={{ maxWidth: 400 }}>
+            <h4 className="mb-3">⚠️ Connection Lost</h4>
+            <p className="mb-4">
+              You have been disconnected from the game. Click below to reconnect and resume playing.
+            </p>
+            <button className="btn btn-primary btn-lg" onClick={handleRejoin}>
+              🔗 Rejoin Game
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="border-bottom border-secondary p-2 bg-dark d-flex justify-content-between align-items-center">
         <div>
