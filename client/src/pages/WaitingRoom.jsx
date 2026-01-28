@@ -1,19 +1,18 @@
-import { useEffect, useState } from "react"
-import { useNavigate, useSearchParams } from "react-router-dom"
-import { socket } from "../socket"
-import "../waiting-room.css"
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { socket } from "../socket";
+import { useLanguage } from "../context/LanguageContext";
+import LanguageToggle from "../components/LanguageToggle";
+import "../waiting-room.css";
 
 export default function WaitingRoom() {
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const { t } = useLanguage();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const roomCode =
-    searchParams.get("room") ||
-    localStorage.getItem("roomCode")
+  const roomCode = searchParams.get("room") || localStorage.getItem("roomCode");
 
-  const username =
-    searchParams.get("name") ||
-    localStorage.getItem("username")
+  const username = searchParams.get("name") || localStorage.getItem("username");
 
   const [room, setRoom] = useState(null)
   const [players, setPlayers] = useState([])
@@ -29,8 +28,8 @@ export default function WaitingRoom() {
   /* ================= SAFETY ================= */
   useEffect(() => {
     if (!roomCode || !username) {
-      navigate("/")
-      return
+      navigate("/");
+      return;
     }
     localStorage.setItem("roomCode", roomCode)
     localStorage.setItem("username", username)
@@ -43,9 +42,9 @@ export default function WaitingRoom() {
     socket.emit("join_room", { roomCode, username })
 
     socket.on("room_update", ({ room, players }) => {
-      setRoom(room)
-      setPlayers(players)
-      setLoading(false)
+      setRoom(room);
+      setPlayers(players);
+      setLoading(false);
 
       const me = players.find(p => p.username === username)
       if (me) setIsReady(me.is_ready)
@@ -61,16 +60,16 @@ export default function WaitingRoom() {
     socket.on("game_start", () => navigate("/game"))
 
     socket.on("error", (err) => {
-      alert(err.message || "Something went wrong")
-      navigate("/")
-    })
+      alert(err.message || "Something went wrong");
+      navigate("/");
+    });
 
     return () => {
-      socket.off("room_update")
-      socket.off("game_start")
-      socket.off("error")
-    }
-  }, [roomCode, username])
+      socket.off("room_update");
+      socket.off("game_start");
+      socket.off("error");
+    };
+  }, [roomCode, username]);
 
   const myPlayer = players.find(p => p.username === username)
 
@@ -131,14 +130,14 @@ export default function WaitingRoom() {
   }
 
   const handleStart = () => {
-    socket.emit("start_game")
-  }
+    socket.emit("start_game");
+  };
 
   const allCharactersGenerated =
     players.length === maxPlayers &&
     players.every(p => characterStatus[p.id])
 
-  const slots = Array.from({ length: maxPlayers })
+  const slots = Array.from({ length: maxPlayers });
 
   if (!room) {
     return (
@@ -151,7 +150,13 @@ export default function WaitingRoom() {
   /* ================= RENDER ================= */
   return (
     <div className="dungeon-bg">
-      <h2 className="waiting-title">Dungeon Waiting Room</h2>
+      <div
+        className="d-flex justify-content-end p-3"
+        style={{ position: "absolute", top: 0, right: 0 }}
+      >
+        <LanguageToggle />
+      </div>
+      <h2 className="waiting-title">{t("waiting.title")}</h2>
 
       {room.dungeon_data && (
         <div className="waiting-dungeon-info">
@@ -232,7 +237,7 @@ export default function WaitingRoom() {
                   <span className="empty-slot">Waiting for adventurer...</span>
                 )}
               </div>
-            )
+            );
           })}
         </div>
 
@@ -246,10 +251,10 @@ export default function WaitingRoom() {
             disabled={!allCharactersGenerated}
             onClick={handleStart}
           >
-            <span>START DUNGEON</span>
+            <span>{t("waiting.startDungeon")}</span>
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }
