@@ -8,8 +8,10 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
+      // Room has many Players
       Room.hasMany(models.Player, { foreignKey: "room_id" });
+      // Room has one host Player
+      Room.belongsTo(models.Player, { foreignKey: "host_id", as: "host" });
     }
   }
   Room.init(
@@ -20,6 +22,7 @@ module.exports = (sequelize, DataTypes) => {
         unique: true,
       },
       host_name: DataTypes.STRING,
+      host_id: DataTypes.INTEGER,
       theme: DataTypes.STRING,
       difficulty: DataTypes.ENUM("easy", "medium", "hard"),
       max_node: DataTypes.INTEGER,

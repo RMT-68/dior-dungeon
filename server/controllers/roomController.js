@@ -22,9 +22,11 @@ class RoomController {
 
       // Create Room in DB
       const roomCode = uuidv4().substring(0, 6).toUpperCase();
+      // For now, host_id will be set when first player joins
       const newRoom = await Room.create({
         room_code: roomCode,
         host_name: hostName,
+        host_id: null,
         theme,
         difficulty,
         max_node: parseInt(maxNode),
