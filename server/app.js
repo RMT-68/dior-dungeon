@@ -19,6 +19,7 @@ app.use(cors());
 app.use(express.json());
 
 const RoomController = require("./controllers/roomController");
+const CharacterController = require("./controllers/characterController");
 const GameHandler = require("./socket/gameHandler");
 const characterRoutes = require("./routes/characterRoutes");
 
@@ -37,6 +38,9 @@ app.get("/api/rooms/:id", RoomController.getRoomDetails);
 // Character generation routes
 app.use("/api/characters", characterRoutes);
 app.get("/api/rooms/:roomCode/characters-status", characterRoutes);
+
+// Pass io instance to CharacterController for broadcasts
+CharacterController.setIO(io);
 
 // Socket.io Connection
 io.on("connection", (socket) => {
