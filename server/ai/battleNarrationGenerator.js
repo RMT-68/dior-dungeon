@@ -57,10 +57,12 @@ Current Battle State:
 
 Player Actions This Round:
 ${processedActions
-  .map(
-    (a) =>
-      `- ${a.playerName}: ${a.actionType === "attack" ? `Attacked with ${a.skillName}` : a.actionType === "heal" ? `Healed with ${a.skillName}` : "Defended"} (Dice: ${a.diceRoll}${a.isCritical ? " CRITICAL!" : ""}${a.isMiss ? " MISS!" : ""})`,
-  )
+  .map((a) => {
+    if (a.actionType === "rest") {
+      return `- ${a.playerName}: Took a rest and regained stamina (Dice: ${a.diceRoll}, Stamina Regained: ${a.staminaRegained})`;
+    }
+    return `- ${a.playerName}: ${a.actionType === "attack" ? `Attacked with ${a.skillName}` : a.actionType === "heal" ? `Healed with ${a.skillName}` : "Defended"} (Dice: ${a.diceRoll}${a.isCritical ? " CRITICAL!" : ""}${a.isMiss ? " MISS!" : ""})`;
+  })
   .join("\n")}
 
 Results:

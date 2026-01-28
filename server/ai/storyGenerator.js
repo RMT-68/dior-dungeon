@@ -18,16 +18,18 @@ Next Location: ${nextNode.name} (${nextNode.type})
 Party Size: ${partyState.playerCount} adventurers
 Average HP: ${partyState.averageHP}%
 
+IMPORTANT: The party's stamina has been partially restored as they move between locations. Mention their brief rest and recovery in the narrative.
+
 Generate a 2-3 sentence narrative in ${language} describing:
-1. The party leaving the current location
+1. The party leaving the current location and taking a brief rest to recover stamina
 2. What they encounter or see along the way
-3. Their arrival at the next location
+3. Their arrival at the next location, refreshed but cautious
 
 Create atmosphere and build tension if they're heading to combat.
 
 Generate ONLY valid JSON:
 {
-  "narrative": "Engaging transition narrative",
+  "narrative": "Engaging transition narrative mentioning their stamina recovery",
   "mood": "tense | hopeful | mysterious | triumphant"
 }`;
 
