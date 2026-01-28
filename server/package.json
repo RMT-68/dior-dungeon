@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "node --watch app.js"
+    "dev": "node --watch app.js",
+    "prod": "node app.js"
   },
   "keywords": [],
   "author": "",
@@ -25,5 +26,8 @@
     "socket.io-client": "^4.8.3",
     "supertest": "^7.2.2",
     "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "sequelize-cli": "^6.6.5"
   }
 }
