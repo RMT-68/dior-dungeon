@@ -538,16 +538,14 @@ export default function GameRoom() {
           {/* NPC Choices */}
           {gameStatus === "npc_event" && npcEvent && (
             <div className="p-2 bg-info border-top border-dark">
-              <p className="mb-2 text-dark fw-bold">
-                {myPlayerId === npcChoosingPlayerId ? "Make your choice:" : "Waiting for decision..."}
-              </p>
+              <p className="mb-2 text-dark fw-bold">{isHost ? "Make your choice:" : "Waiting for host decision..."}</p>
               <div className="d-flex gap-2 flex-wrap">
                 {npcEvent.choices?.map((choice, idx) => (
                   <button
                     key={idx}
                     className="btn btn-dark btn-sm"
                     onClick={() => handleNpcChoice(choice.id)}
-                    disabled={myPlayerId !== npcChoosingPlayerId}
+                    disabled={!isHost}
                   >
                     {choice.label}
                   </button>

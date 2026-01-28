@@ -832,9 +832,12 @@ class GameHandler {
         language: room.language,
       });
 
-      // Select a random player to make the choice
-      const choosingPlayerIndex = Math.floor(Math.random() * players.length);
-      const choosingPlayer = players[choosingPlayerIndex];
+      // Select the host to make the choice
+      const choosingPlayer = players.find((p) => p.id === room.host_id);
+      if (!choosingPlayer) {
+        console.error("Host player not found for NPC event");
+        return;
+      }
 
       // Store event in game_state with choosing player info
       room.game_state = {
