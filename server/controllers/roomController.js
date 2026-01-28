@@ -5,14 +5,13 @@ const { v4: uuidv4 } = require("uuid");
 class RoomController {
   static async createRoom(req, res) {
     try {
-      const { hostName, theme, difficulty, maxNode, language } = req.body;
+      const { hostName, difficulty, maxNode, language, theme } = req.body;
 
-      // Validate input
-      if (!hostName || !theme || !difficulty || !maxNode) {
+      // 🔒 VALIDATION (THEME NOT REQUIRED)
+      if (!hostName || !difficulty || !maxNode) {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
-      // Generate Dungeon
       const dungeon = await generateDungeon({
         theme,
         difficulty,
@@ -20,12 +19,12 @@ class RoomController {
         language: language || "en",
       });
 
-      // Create Room in DB
       const roomCode = uuidv4().substring(0, 6).toUpperCase();
+
       const newRoom = await Room.create({
         room_code: roomCode,
         host_name: hostName,
-        theme,
+        theme: dungeon.theme, // 🔥 AI GENERATED
         difficulty,
         max_node: parseInt(maxNode),
         language: language || "en",
@@ -56,10 +55,9 @@ class RoomController {
         include: [{ model: Player, attributes: ["username"] }],
         order: [["createdAt", "DESC"]],
       });
-      return res.status(200).json({ success: true, data: rooms });
+      res.json({ success: true, data: rooms });
     } catch (error) {
-      console.error("Error fetching rooms:", error);
-      return res.status(500).json({ error: "Failed to fetch rooms" });
+      res.status(500).json({ error: "Failed to fetch rooms" });
     }
   }
 
@@ -75,10 +73,9 @@ class RoomController {
         return res.status(404).json({ error: "Room not found" });
       }
 
-      return res.status(200).json({ success: true, data: room });
+      res.json({ success: true, data: room });
     } catch (error) {
-      console.error("Error fetching room details:", error);
-      return res.status(500).json({ error: "Failed to fetch room details" });
+      res.status(500).json({ error: "Failed to fetch room details" });
     }
   }
 }
