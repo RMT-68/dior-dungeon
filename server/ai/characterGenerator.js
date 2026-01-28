@@ -79,7 +79,7 @@ Remember: Generate exactly 3-4 skills. All values must be numbers for HP, Stamin
 
   try {
     // Call Gemini AI
-    const aiResponse = await gemini("gemini-3-flash-preview", prompt);
+    const aiResponse = await gemini("gemini-3-flash-preview", prompt); //gemini-3-pro-image-preview
 
     // Clean the response (remove markdown code blocks if present)
     let cleanedResponse = aiResponse.trim();
@@ -127,9 +127,18 @@ function validateCharacterStructure(character) {
     throw new Error("Character must have at least 3 skills");
   }
 
-  const validRoles = ["Warrior", "Mage", "Rogue", "Paladin", "Ranger", "Cleric"];
+  const validRoles = [
+    "Warrior",
+    "Mage",
+    "Rogue",
+    "Paladin",
+    "Ranger",
+    "Cleric",
+  ];
   if (!validRoles.includes(character.role)) {
-    throw new Error(`Invalid character role. Must be one of: ${validRoles.join(", ")}`);
+    throw new Error(
+      `Invalid character role. Must be one of: ${validRoles.join(", ")}`,
+    );
   }
 
   if (character.hp < 50 || character.hp > 200) {
@@ -165,10 +174,34 @@ function createFallbackCharacter({ theme = "Fantasy", language = "en" }) {
       stamina = 4 + Math.floor(Math.random() * 3);
       skillPower = 1.5 + Math.random() * 0.5;
       skillsDefault = [
-        { name: "Slash", description: "A basic melee attack", type: "damage", amount: 20, staminaCost: 1 },
-        { name: "Power Strike", description: "A powerful charging attack", type: "damage", amount: 40, staminaCost: 2 },
-        { name: "Defend", description: "Take a defensive stance", type: "healing", amount: 15, staminaCost: 1 },
-        { name: "Whirlwind", description: "Attack all enemies at once", type: "damage", amount: 50, staminaCost: 3 },
+        {
+          name: "Slash",
+          description: "A basic melee attack",
+          type: "damage",
+          amount: 20,
+          staminaCost: 1,
+        },
+        {
+          name: "Power Strike",
+          description: "A powerful charging attack",
+          type: "damage",
+          amount: 40,
+          staminaCost: 2,
+        },
+        {
+          name: "Defend",
+          description: "Take a defensive stance",
+          type: "healing",
+          amount: 15,
+          staminaCost: 1,
+        },
+        {
+          name: "Whirlwind",
+          description: "Attack all enemies at once",
+          type: "damage",
+          amount: 50,
+          staminaCost: 3,
+        },
       ];
       break;
     case "Mage":
@@ -176,7 +209,13 @@ function createFallbackCharacter({ theme = "Fantasy", language = "en" }) {
       stamina = 8 + Math.floor(Math.random() * 3);
       skillPower = 2.5 + Math.random() * 1.0;
       skillsDefault = [
-        { name: "Fireball", description: "Hurl a ball of fire at enemies", type: "damage", amount: 60, staminaCost: 2 },
+        {
+          name: "Fireball",
+          description: "Hurl a ball of fire at enemies",
+          type: "damage",
+          amount: 60,
+          staminaCost: 2,
+        },
         {
           name: "Ice Storm",
           description: "Freeze enemies with magical ice",
@@ -184,8 +223,20 @@ function createFallbackCharacter({ theme = "Fantasy", language = "en" }) {
           amount: 55,
           staminaCost: 2,
         },
-        { name: "Mana Shield", description: "Create a magical barrier", type: "healing", amount: 35, staminaCost: 3 },
-        { name: "Lightning Bolt", description: "Strike with electricity", type: "damage", amount: 70, staminaCost: 3 },
+        {
+          name: "Mana Shield",
+          description: "Create a magical barrier",
+          type: "healing",
+          amount: 35,
+          staminaCost: 3,
+        },
+        {
+          name: "Lightning Bolt",
+          description: "Strike with electricity",
+          type: "damage",
+          amount: 70,
+          staminaCost: 3,
+        },
       ];
       break;
     case "Rogue":
@@ -193,10 +244,34 @@ function createFallbackCharacter({ theme = "Fantasy", language = "en" }) {
       stamina = 6 + Math.floor(Math.random() * 4);
       skillPower = 2.0 + Math.random() * 0.8;
       skillsDefault = [
-        { name: "Backstab", description: "Strike from the shadows", type: "damage", amount: 55, staminaCost: 2 },
-        { name: "Shadow Clone", description: "Create a decoy", type: "damage", amount: 30, staminaCost: 2 },
-        { name: "Evasion", description: "Dodge incoming attacks", type: "healing", amount: 25, staminaCost: 1 },
-        { name: "Poison Strike", description: "Poison your blade", type: "damage", amount: 45, staminaCost: 2 },
+        {
+          name: "Backstab",
+          description: "Strike from the shadows",
+          type: "damage",
+          amount: 55,
+          staminaCost: 2,
+        },
+        {
+          name: "Shadow Clone",
+          description: "Create a decoy",
+          type: "damage",
+          amount: 30,
+          staminaCost: 2,
+        },
+        {
+          name: "Evasion",
+          description: "Dodge incoming attacks",
+          type: "healing",
+          amount: 25,
+          staminaCost: 1,
+        },
+        {
+          name: "Poison Strike",
+          description: "Poison your blade",
+          type: "damage",
+          amount: 45,
+          staminaCost: 2,
+        },
       ];
       break;
     case "Paladin":
@@ -204,10 +279,34 @@ function createFallbackCharacter({ theme = "Fantasy", language = "en" }) {
       stamina = 4 + Math.floor(Math.random() * 3);
       skillPower = 2.0 + Math.random() * 0.5;
       skillsDefault = [
-        { name: "Holy Strike", description: "Strike with divine power", type: "damage", amount: 45, staminaCost: 2 },
-        { name: "Protection Aura", description: "Protect nearby allies", type: "healing", amount: 40, staminaCost: 2 },
-        { name: "Divine Shield", description: "Block all damage", type: "healing", amount: 50, staminaCost: 3 },
-        { name: "Healing Light", description: "Heal yourself or an ally", type: "healing", amount: 45, staminaCost: 2 },
+        {
+          name: "Holy Strike",
+          description: "Strike with divine power",
+          type: "damage",
+          amount: 45,
+          staminaCost: 2,
+        },
+        {
+          name: "Protection Aura",
+          description: "Protect nearby allies",
+          type: "healing",
+          amount: 40,
+          staminaCost: 2,
+        },
+        {
+          name: "Divine Shield",
+          description: "Block all damage",
+          type: "healing",
+          amount: 50,
+          staminaCost: 3,
+        },
+        {
+          name: "Healing Light",
+          description: "Heal yourself or an ally",
+          type: "healing",
+          amount: 45,
+          staminaCost: 2,
+        },
       ];
       break;
     case "Ranger":
@@ -215,9 +314,27 @@ function createFallbackCharacter({ theme = "Fantasy", language = "en" }) {
       stamina = 6 + Math.floor(Math.random() * 4);
       skillPower = 2.0 + Math.random() * 0.8;
       skillsDefault = [
-        { name: "Arrow Shot", description: "Fire an accurate arrow", type: "damage", amount: 35, staminaCost: 1 },
-        { name: "Multi-Shot", description: "Fire multiple arrows", type: "damage", amount: 50, staminaCost: 2 },
-        { name: "Trap", description: "Set a trap for enemies", type: "damage", amount: 40, staminaCost: 2 },
+        {
+          name: "Arrow Shot",
+          description: "Fire an accurate arrow",
+          type: "damage",
+          amount: 35,
+          staminaCost: 1,
+        },
+        {
+          name: "Multi-Shot",
+          description: "Fire multiple arrows",
+          type: "damage",
+          amount: 50,
+          staminaCost: 2,
+        },
+        {
+          name: "Trap",
+          description: "Set a trap for enemies",
+          type: "damage",
+          amount: 40,
+          staminaCost: 2,
+        },
         {
           name: "Beast Companion",
           description: "Summon a helpful animal",
@@ -232,10 +349,34 @@ function createFallbackCharacter({ theme = "Fantasy", language = "en" }) {
       stamina = 7 + Math.floor(Math.random() * 3);
       skillPower = 2.0 + Math.random() * 0.8;
       skillsDefault = [
-        { name: "Heal", description: "Restore HP to self or ally", type: "healing", amount: 50, staminaCost: 2 },
-        { name: "Holy Smite", description: "Deal holy damage", type: "damage", amount: 40, staminaCost: 2 },
-        { name: "Blessing", description: "Increase ally stats", type: "healing", amount: 35, staminaCost: 2 },
-        { name: "Resurrection", description: "Bring an ally back", type: "healing", amount: 60, staminaCost: 3 },
+        {
+          name: "Heal",
+          description: "Restore HP to self or ally",
+          type: "healing",
+          amount: 50,
+          staminaCost: 2,
+        },
+        {
+          name: "Holy Smite",
+          description: "Deal holy damage",
+          type: "damage",
+          amount: 40,
+          staminaCost: 2,
+        },
+        {
+          name: "Blessing",
+          description: "Increase ally stats",
+          type: "healing",
+          amount: 35,
+          staminaCost: 2,
+        },
+        {
+          name: "Resurrection",
+          description: "Bring an ally back",
+          type: "healing",
+          amount: 60,
+          staminaCost: 3,
+        },
       ];
       break;
   }

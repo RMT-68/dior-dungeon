@@ -1,37 +1,44 @@
-import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useLanguage } from "../context/LanguageContext";
+import LanguageToggle from "../components/LanguageToggle";
 
 export default function Lobby() {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
+  const {
+    t,
+    language: currentLang,
+    setLanguage: setGlobalLanguage,
+  } = useLanguage();
 
-  const [username, setUsername] = useState("")
-  const [roomCode, setRoomCode] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [username, setUsername] = useState("");
+  const [roomCode, setRoomCode] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
-  const [theme, setTheme] = useState("") 
-  const [difficulty, setDifficulty] = useState("easy")
-  const [maxNode, setMaxNode] = useState(5)
-  const [language, setLanguage] = useState("en")
+  const [theme, setTheme] = useState("");
+  const [difficulty, setDifficulty] = useState("easy");
+  const [maxNode, setMaxNode] = useState(5);
+  const [language, setLanguage] = useState(currentLang);
 
   const handleCreateRoom = async () => {
     if (!username) {
-      alert("Enter your name")
-      return
+      alert("Enter your name");
+      return;
     }
 
     if (!theme.trim()) {
-      alert("Please enter a dungeon theme")
-      return
+      alert("Please enter a dungeon theme");
+      return;
     }
 
     if (maxNode < 3) {
-      alert("Dungeon length must be at least 3 nodes")
-      return
+      alert("Dungeon length must be at least 3 nodes");
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
 
     try {
       const res = await fetch("http://localhost:3000/api/rooms", {
@@ -39,75 +46,72 @@ export default function Lobby() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           hostName: username,
-          theme: theme.trim(), 
+          theme: theme.trim(),
           difficulty,
           maxNode: Number(maxNode),
           language,
         }),
-      })
+      });
 
-      if (!res.ok) throw new Error("Failed to create room")
+      if (!res.ok) throw new Error("Failed to create room");
 
-      const data = await res.json()
-      const createdRoomCode = data.data.room_code
+      const data = await res.json();
+      const createdRoomCode = data.data.room_code;
 
-      localStorage.setItem("username", username)
-      localStorage.setItem("roomCode", createdRoomCode)
+      localStorage.setItem("username", username);
+      localStorage.setItem("roomCode", createdRoomCode);
 
-      navigate(`/wait?room=${createdRoomCode}&name=${username}`)
+      navigate(`/wait?room=${createdRoomCode}&name=${username}`);
     } catch (err) {
-      console.error(err)
-      alert("Failed to create room")
+      console.error(err);
+      alert("Failed to create room");
     } finally {
-      setLoading(false)
-      setShowCreateModal(false)
+      setLoading(false);
+      setShowCreateModal(false);
     }
-  }
+  };
 
   const handleJoinRoom = () => {
     if (!username || !roomCode) {
-      alert("Enter name & room code")
-      return
+      alert("Enter name & room code");
+      return;
     }
 
-    localStorage.setItem("username", username)
-    localStorage.setItem("roomCode", roomCode)
+    localStorage.setItem("username", username);
+    localStorage.setItem("roomCode", roomCode);
 
-    navigate(`/wait?room=${roomCode}&name=${username}`)
-  }
+    navigate(`/wait?room=${roomCode}&name=${username}`);
+  };
 
   return (
     <div className="vh-100 dungeon-hero d-flex flex-column">
-
       <nav className="navbar navbar-dark px-4">
         <div className="container-fluid d-flex justify-content-between">
           <img src="/dior-dungeon.png" alt="logo" style={{ height: 70 }} />
-          <button className="btn btn-dungeon">
-            <span>HOME</span>
-          </button>
+          <div className="d-flex align-items-center gap-3">
+            <LanguageToggle />
+            <button className="btn btn-dungeon">
+              <span>{t("common.home")}</span>
+            </button>
+          </div>
         </div>
       </nav>
 
       <div className="flex-grow-1 d-flex align-items-center justify-content-center">
         <div className="text-center text-light hero-content px-3">
-
           <img
             src="/dior-dungeon.png"
             className="hero-logo logo-glow mb-3"
             alt="Dior Dungeon"
           />
 
-          <p className="hero-subtitle">
-            A text-based dungeon adventure where an AI Dungeon Master
-            brings your story to life.
-          </p>
+          <p className="hero-subtitle">{t("lobby.subtitle")}</p>
 
           <div className="dungeon-form">
             <div className="dungeon-form-inner">
-
               <input
                 className="form-control dungeon-input"
-                placeholder="Enter your name"
+                placeholder={t("lobby.enterName")}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={loading}
@@ -115,11 +119,9 @@ export default function Lobby() {
 
               <input
                 className="form-control dungeon-input"
-                placeholder="Enter room code (optional)"
+                placeholder={t("lobby.enterRoomCode")}
                 value={roomCode}
-                onChange={(e) =>
-                  setRoomCode(e.target.value.toUpperCase())
-                }
+                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
                 disabled={loading}
               />
 
@@ -127,12 +129,12 @@ export default function Lobby() {
                 <button
                   className="btn btn-dungeon-primary"
                   onClick={() => {
-                    if (!username) return alert("Enter your name")
-                    setShowCreateModal(true)
+                    if (!username) return alert(t("lobby.enterName"));
+                    setShowCreateModal(true);
                   }}
                   disabled={loading}
                 >
-                  <span>CREATE DUNGEON</span>
+                  <span>{t("lobby.create")}</span>
                 </button>
 
                 <button
@@ -140,13 +142,11 @@ export default function Lobby() {
                   onClick={handleJoinRoom}
                   disabled={loading}
                 >
-                  <span>JOIN DUNGEON</span>
+                  <span>{t("lobby.join")}</span>
                 </button>
               </div>
-
             </div>
           </div>
-
         </div>
       </div>
 
@@ -157,9 +157,8 @@ export default function Lobby() {
         >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content bg-dark text-light border-warning">
-
               <div className="modal-header border-warning">
-                <h5>Create Dungeon</h5>
+                <h5>{t("lobby.createRoom")}</h5>
                 <button
                   className="btn-close btn-close-white"
                   onClick={() => setShowCreateModal(false)}
@@ -167,28 +166,27 @@ export default function Lobby() {
               </div>
 
               <div className="modal-body">
-
-                <label>Dungeon Theme</label>
+                <label>{t("lobby.dungeonTheme")}</label>
                 <input
                   type="text"
                   className="form-control dungeon-input"
-                  placeholder="e.g. Vampire Cathedral, Cyberpunk Ruins, Desert of Gods"
+                  placeholder={t("lobby.themePlaceholder")}
                   value={theme}
                   onChange={(e) => setTheme(e.target.value)}
                 />
 
-                <label className="mt-3">Difficulty</label>
+                <label className="mt-3">{t("lobby.difficulty")}</label>
                 <select
                   className="form-select dungeon-input"
                   value={difficulty}
                   onChange={(e) => setDifficulty(e.target.value)}
                 >
-                  <option value="easy">Easy</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
+                  <option value="easy">{t("lobby.easy")}</option>
+                  <option value="medium">{t("lobby.medium")}</option>
+                  <option value="hard">{t("lobby.hard")}</option>
                 </select>
 
-                <label className="mt-3">Dungeon Length</label>
+                <label className="mt-3">{t("lobby.dungeonLength")}</label>
                 <input
                   type="number"
                   min={3}
@@ -198,16 +196,18 @@ export default function Lobby() {
                   onChange={(e) => setMaxNode(Number(e.target.value))}
                 />
 
-                <label className="mt-3">Language</label>
+                <label className="mt-3">{t("lobby.language")}</label>
                 <select
                   className="form-select dungeon-input"
                   value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
+                  onChange={(e) => {
+                    setLanguage(e.target.value);
+                    setGlobalLanguage(e.target.value);
+                  }}
                 >
                   <option value="en">English</option>
                   <option value="id">Bahasa Indonesia</option>
                 </select>
-
               </div>
 
               <div className="modal-footer border-warning">
@@ -217,15 +217,14 @@ export default function Lobby() {
                   disabled={loading}
                 >
                   <span>
-                    {loading ? "CREATING..." : "CONFIRM CREATE"}
+                    {loading ? t("lobby.creating") : t("lobby.confirmCreate")}
                   </span>
                 </button>
               </div>
-
             </div>
           </div>
         </div>
       )}
     </div>
-  )
+  );
 }
