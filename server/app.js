@@ -20,6 +20,7 @@ app.use(express.json());
 
 const RoomController = require("./controllers/roomController");
 const GameHandler = require("./socket/gameHandler");
+const characterRoutes = require("./routes/characterRoutes");
 
 // Routes
 app.get("/health", (req, res) => {
@@ -32,6 +33,10 @@ app.use(testRoutes);
 app.post("/api/rooms", RoomController.createRoom);
 app.get("/api/rooms", RoomController.getRooms);
 app.get("/api/rooms/:id", RoomController.getRoomDetails);
+
+// Character generation routes
+app.use("/api/characters", characterRoutes);
+app.get("/api/rooms/:roomCode/characters-status", characterRoutes);
 
 // Socket.io Connection
 io.on("connection", (socket) => {

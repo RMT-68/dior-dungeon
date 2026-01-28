@@ -1,5 +1,4 @@
 const { Room, Player } = require("../models");
-const { generateCharacter } = require("../ai/characterGenerator");
 const { generateBattleNarration } = require("../ai/battleNarrationGenerator");
 const { generateNPCEvent } = require("../ai/npcEventGenerator");
 const {
@@ -81,6 +80,14 @@ class GameHandler {
       this.socket.data.roomCode = roomCode;
       this.socket.data.playerId = player.id;
       this.socket.data.username = username;
+
+      // Emit player ID back to client
+      this.socket.emit("join_room_success", {
+        playerId: player.id,
+        roomCode: roomCode,
+        username: username,
+        isHost: room.host_id === player.id,
+      });
 
       // Broadcast updated player list
       const players = await Player.findAll({ where: { room_id: room.id } });
@@ -222,23 +229,14 @@ class GameHandler {
         });
       }
 
-      // Generate characters for all players
-      const characterPromises = players.map(async (p) => {
-        // Use room theme for character generation context
-        const charData = await generateCharacter({
-          theme: room.theme,
-          language: room.language,
+      // Check all players have generated characters
+      const allHaveCharacters = players.every((p) => p.character_data && Object.keys(p.character_data).length > 0);
+
+      if (!allHaveCharacters) {
+        return this.socket.emit("error", {
+          message: "All players must generate a character before starting the game",
         });
-        p.character_data = charData;
-
-        // Initialize current stats from AI generated max values
-        p.current_hp = parseInt(charData.hp) || 100;
-        p.current_stamina = parseInt(charData.stamina) || 100;
-
-        return p.save();
-      });
-
-      await Promise.all(characterPromises);
+      }
 
       // Update room status
       room.status = "playing";
