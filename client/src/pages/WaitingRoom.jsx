@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { socket } from "../socket";
 import { useLanguage } from "../context/LanguageContext";
@@ -20,7 +20,9 @@ export default function WaitingRoom() {
   const [isReady, setIsReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [hasJoined, setHasJoined] = useState(false);
+
+  // Use ref to track join status - persists across re-renders
+  const hasJoinedRef = useRef(false);
 
   const [regenCount, setRegenCount] = useState(0);
   const MAX_REGEN = 3;
@@ -40,10 +42,10 @@ export default function WaitingRoom() {
   useEffect(() => {
     if (!socket.connected) socket.connect();
 
-    // Prevent double join - only emit join_room once per session
-    if (!hasJoined) {
+    // Prevent double join - only emit join_room once per session using ref
+    if (!hasJoinedRef.current) {
+      hasJoinedRef.current = true;
       socket.emit("join_room", { roomCode, username });
-      setHasJoined(true);
     }
 
     socket.on("room_update", ({ room, players }) => {
