@@ -2,6 +2,10 @@ const { Room, Player } = require("../models");
 const { generateCharacter } = require("../ai/characterGenerator");
 
 class CharacterController {
+  // Store io instance for socket broadcasts
+  static setIO(io) {
+    this.io = io;
+  }
   /**
    * Generate a character for a player in a room
    * POST /api/characters/:playerId/generate
@@ -51,6 +55,15 @@ class CharacterController {
       player.current_hp = parseInt(charData.hp) || 100;
       player.current_stamina = parseInt(charData.stamina) || 100;
       await player.save();
+
+      // Broadcast to all players in the room
+      if (CharacterController.io) {
+        const allPlayers = await Player.findAll({ where: { room_id: room.id } });
+        CharacterController.io.to(roomCode).emit("room_update", {
+          room: room,
+          players: allPlayers,
+        });
+      }
 
       return res.status(200).json({
         success: true,
@@ -111,6 +124,15 @@ class CharacterController {
       player.current_hp = parseInt(charData.hp) || 100;
       player.current_stamina = parseInt(charData.stamina) || 100;
       await player.save();
+
+      // Broadcast to all players in the room
+      if (CharacterController.io) {
+        const allPlayers = await Player.findAll({ where: { room_id: room.id } });
+        CharacterController.io.to(roomCode).emit("room_update", {
+          room: room,
+          players: allPlayers,
+        });
+      }
 
       return res.status(200).json({
         success: true,
