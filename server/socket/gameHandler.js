@@ -252,7 +252,7 @@ class GameHandler {
       // If it's an NPC node, trigger event immediately? Or wait for client?
       // Let's assume start triggers the view.
       if (firstNode.type === "npc") {
-        await this.triggerNPCEvent(room, updatedPlayers);
+        await this.triggerNPCEvent(room, updatedPlayers, roomCode);
       }
     } catch (error) {
       console.error("Start game error:", error);
@@ -675,14 +675,14 @@ class GameHandler {
       });
 
       if (nextNode.type === "npc") {
-        await this.triggerNPCEvent(room, players);
+        await this.triggerNPCEvent(room, players, roomCode);
       }
     } catch (error) {
       console.error("Next node error:", error);
     }
   }
 
-  async triggerNPCEvent(room, players) {
+  async triggerNPCEvent(room, players, roomCode) {
     const currentNode = room.game_state.currentNode;
 
     // Calculate actual party averages
@@ -717,9 +717,7 @@ class GameHandler {
     await room.save();
 
     // Emit event to all players, but indicate who gets to choose
-    // Use room.room_code from DB or fallback to stored roomCode
-    const roomCodeForEmit = room.room_code || room.room_code;
-    this.io.to(roomCodeForEmit).emit("npc_event", {
+    this.io.to(roomCode).emit("npc_event", {
       event: event,
       choosingPlayerId: choosingPlayer.id,
       choosingPlayerName: choosingPlayer.username,
