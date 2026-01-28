@@ -18,7 +18,8 @@ async function generateBattleNarration({ theme, enemy, playerActions, battleStat
 
   // Calculate player action results with dice rolls
   const processedActions = playerActions.map((action) => {
-    const diceRoll = rollD20();
+    // REST actions already have their D6 diceRoll, don't generate a new one
+    const diceRoll = action.type === "rest" ? action.diceRoll : rollD20();
     let result;
 
     if (action.type === "attack") {
@@ -27,6 +28,8 @@ async function generateBattleNarration({ theme, enemy, playerActions, battleStat
       result = calculateHealing(action, diceRoll);
     } else if (action.type === "defend") {
       result = { type: "defend", defenseBonus: 0.4, diceRoll };
+    } else if (action.type === "rest") {
+      result = { type: "rest" };
     }
 
     return {
