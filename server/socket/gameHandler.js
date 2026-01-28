@@ -54,13 +54,18 @@ class GameHandler {
         where: { room_id: room.id, username },
       });
 
-      if (!player) {
-        // New player joining
+      if (player) {
+        // Player reconnecting: update socket ID (always allow)
+        player.socket_id = this.socket.id;
+        await player.save();
+      } else {
+        // New player joining - reject if game in progress
         if (room.status === "playing") {
           return this.socket.emit("error", {
             message: "Cannot join a game already in progress. Wait for it to finish.",
           });
         }
+
         player = await Player.create({
           username,
           socket_id: this.socket.id,
@@ -77,10 +82,6 @@ class GameHandler {
           room.host_id = player.id;
           await room.save();
         }
-      } else {
-        // Player reconnecting: update socket ID
-        player.socket_id = this.socket.id;
-        await player.save();
       }
 
       this.socket.join(roomCode);

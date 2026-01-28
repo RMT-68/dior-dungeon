@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
 import LanguageToggle from "../components/LanguageToggle";
@@ -6,15 +6,16 @@ import MusicPlayer from "../components/MusicPlayer";
 
 export default function Lobby() {
   const navigate = useNavigate();
-  const {
-    t,
-    language: currentLang,
-    setLanguage: setGlobalLanguage,
-  } = useLanguage();
+  const { t, language: currentLang, setLanguage: setGlobalLanguage } = useLanguage();
 
   const [username, setUsername] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Clear localStorage on lobby mount
+  useEffect(() => {
+    localStorage.clear();
+  }, []);
 
   // Error states
   const [error, setError] = useState("");
@@ -50,10 +51,7 @@ export default function Lobby() {
     }
 
     if (maxNode < 3) {
-      showError(
-        t("lobby.minNodes") || "Dungeon length must be at least 3 nodes",
-        true,
-      );
+      showError(t("lobby.minNodes") || "Dungeon length must be at least 3 nodes", true);
       return;
     }
 
@@ -61,7 +59,7 @@ export default function Lobby() {
     setModalError("");
 
     try {
-      const res = await fetch("http://localhost:3000/api/rooms", {
+      const res = await fetch("https://api.jobberint.space/api/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -128,11 +126,7 @@ export default function Lobby() {
 
       <div className="flex-grow-1 d-flex align-items-center justify-content-center">
         <div className="text-center text-light hero-content px-3">
-          <img
-            src="/dior-dungeon.png"
-            className="hero-logo logo-glow mb-3"
-            alt="Dior Dungeon"
-          />
+          <img src="/dior-dungeon.png" className="hero-logo logo-glow mb-3" alt="Dior Dungeon" />
 
           <p className="hero-subtitle">{t("lobby.subtitle")}</p>
 
@@ -177,19 +171,11 @@ export default function Lobby() {
               />
 
               <div className="d-flex flex-column gap-3 mt-3">
-                <button
-                  className="btn btn-dungeon-primary"
-                  onClick={handleOpenCreateModal}
-                  disabled={loading}
-                >
+                <button className="btn btn-dungeon-primary" onClick={handleOpenCreateModal} disabled={loading}>
                   <span>{t("lobby.create")}</span>
                 </button>
 
-                <button
-                  className="btn btn-dungeon"
-                  onClick={handleJoinRoom}
-                  disabled={loading}
-                >
+                <button className="btn btn-dungeon" onClick={handleJoinRoom} disabled={loading}>
                   <span>{t("lobby.join")}</span>
                 </button>
               </div>
@@ -199,18 +185,12 @@ export default function Lobby() {
       </div>
 
       {showCreateModal && (
-        <div
-          className="modal fade show d-block"
-          style={{ background: "rgba(0,0,0,.85)" }}
-        >
+        <div className="modal fade show d-block" style={{ background: "rgba(0,0,0,.85)" }}>
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content bg-dark text-light border-warning">
               <div className="modal-header border-warning">
                 <h5>{t("lobby.createRoom")}</h5>
-                <button
-                  className="btn-close btn-close-white"
-                  onClick={() => setShowCreateModal(false)}
-                />
+                <button className="btn-close btn-close-white" onClick={() => setShowCreateModal(false)} />
               </div>
 
               <div className="modal-body">
@@ -278,14 +258,8 @@ export default function Lobby() {
               </div>
 
               <div className="modal-footer border-warning">
-                <button
-                  className="btn btn-dungeon-primary w-100"
-                  onClick={handleCreateRoom}
-                  disabled={loading}
-                >
-                  <span>
-                    {loading ? t("lobby.creating") : t("lobby.confirmCreate")}
-                  </span>
+                <button className="btn btn-dungeon-primary w-100" onClick={handleCreateRoom} disabled={loading}>
+                  <span>{loading ? t("lobby.creating") : t("lobby.confirmCreate")}</span>
                 </button>
               </div>
             </div>
