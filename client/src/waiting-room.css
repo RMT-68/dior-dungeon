@@ -1,0 +1,144 @@
+@import url("https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap");
+
+.dungeon-bg {
+  min-height: 100vh;
+  background-image:
+    radial-gradient(
+      circle at center,
+      rgba(0,0,0,0.35),
+      rgba(0,0,0,0.85)
+    ),
+    
+    url("/waiting.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 60px;
+}
+
+.waiting-title {
+  font-family: "MedievalSharp", cursive;
+  font-size: 2.1rem;
+  letter-spacing: 4px;
+  color: #f8fafc;
+  text-shadow:
+    0 0 14px rgba(250,204,21,.45),
+    0 0 6px rgba(0,0,0,.9);
+}
+
+.waiting-sub {
+  opacity: 0.75;
+  margin-bottom: 36px;
+}
+
+.waiting-focus {
+  padding: 40px 60px;
+  background:
+    linear-gradient(
+      rgba(0,0,0,0.55),
+      rgba(0,0,0,0.85)
+    );
+  border: 1px solid rgba(250,204,21,.25);
+  box-shadow: 0 30px 80px rgba(0,0,0,.9);
+  backdrop-filter: blur(4px);
+}
+
+.player-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 180px);
+  gap: 28px;
+  margin-bottom: 40px;
+}
+
+.player-card {
+  height: 280px;
+  background:
+    linear-gradient(
+      rgba(0,0,0,0.65),
+      rgba(0,0,0,0.9)
+    );
+  border: 2px solid rgba(250,204,21,.35);
+  box-shadow:
+    inset 0 0 30px rgba(0,0,0,.9),
+    0 20px 50px rgba(0,0,0,.85);
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  transition: all .25s ease;
+}
+
+.player-card.ready {
+  border-color: #facc15;
+  box-shadow:
+    0 0 18px rgba(250,204,21,.45),
+    inset 0 0 25px rgba(250,204,21,.15),
+    0 24px 60px rgba(0,0,0,.9);
+}
+
+.player-card.empty {
+  opacity: 0.25;
+  border-style: dashed;
+  background:
+    linear-gradient(
+      rgba(0,0,0,.4),
+      rgba(0,0,0,.7)
+    );
+}
+
+.player-name {
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.player-status {
+  font-size: 0.85rem;
+  letter-spacing: 2px;
+  opacity: 0.7;
+}
+
+.empty-slot {
+  opacity: 0.5;
+}
+
+.waiting-actions {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+}
+
+.btn-dungeon,
+.btn-dungeon-primary {
+  position: relative;
+  background:
+    linear-gradient(180deg, #facc15, #ca8a04),
+    repeating-linear-gradient(
+      135deg,
+      rgba(0, 0, 0, 0.2),
+      rgba(0, 0, 0, 0.2) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  color: #1c1917;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  padding: 12px 28px;
+  border: 3px solid #1c1917;
+}
+
+.btn-dungeon span,
+.btn-dungeon-primary span {
+  font-family: "MedievalSharp", cursive;
+}
+
+.btn-dungeon-primary {
+  box-shadow:
+    6px 8px 0 #1c1917,
+    14px 20px 32px rgba(0,0,0,.85);
+}
