@@ -84,10 +84,11 @@ class GameHandler {
         try {
           const history = room.game_state.adventure_log || [];
           const players = await Player.findAll({ where: { room_id: room.id } });
+          const avgHP = Math.round(players.reduce((sum, p) => sum + p.current_hp, 0) / players.length);
           const partyState = {
             playerCount: players.length,
             aliveCount: players.filter((p) => p.is_alive).length,
-            averageHP: 80, // Placeholder, calculate real if needed
+            averageHP: avgHP,
           };
 
           const summary = await generateStoryThusFar({
@@ -363,7 +364,6 @@ class GameHandler {
     const updatedEnemy = { ...currentEnemy, hp: battleResult.enemyHP.current };
 
     // Process Enemy Action (Damage to players)
-    let playersUpdated = false;
     if (battleResult.enemyAction && battleResult.enemyAction.type === "attack") {
       const damage = battleResult.enemyAction.finalDamage;
       // Distribute damage (random target or all? Let's say random for now or logic in AI?)
@@ -453,10 +453,11 @@ class GameHandler {
     if (battleStatus === "victory") {
       // Handle Victory Logic (XP, gold? simply wait for next node)
       // Maybe auto-trigger summary?
+      const avgHP = Math.round(players.reduce((sum, p) => sum + p.current_hp, 0) / players.length);
       const partyState = {
         aliveCount: players.filter((p) => p.is_alive).length,
         totalCount: players.length,
-        averageHP: 50, // TODO: calculate real avg
+        averageHP: avgHP,
       };
       const summary = await generateAfterBattleSummary({
         theme: room.theme,
@@ -512,9 +513,10 @@ class GameHandler {
 
       const currentNode = room.game_state.currentNode;
       const players = await Player.findAll({ where: { room_id: room.id } });
+      const avgHP = Math.round(players.reduce((sum, p) => sum + p.current_hp, 0) / players.length);
       const partyState = {
         playerCount: players.length,
-        averageHP: 80, // Calculate real
+        averageHP: avgHP,
       };
 
       // Generate Transition
@@ -567,55 +569,125 @@ class GameHandler {
 
   async triggerNPCEvent(room, players) {
     const currentNode = room.game_state.currentNode;
-    const partyAvgHP = 80; // Calculate real
+
+    // Calculate actual party averages
+    const avgHP = Math.round(players.reduce((sum, p) => sum + p.current_hp, 0) / players.length);
+    const avgMaxHP = Math.round(players.reduce((sum, p) => sum + p.character_data.maxHP, 0) / players.length);
+    const avgStamina = Math.round(players.reduce((sum, p) => sum + p.current_stamina, 0) / players.length);
+    const avgMaxStamina = Math.round(players.reduce((sum, p) => sum + p.character_data.maxStamina, 0) / players.length);
 
     const event = await generateNPCEvent({
       theme: room.theme,
       nodeId: currentNode.id,
-      playerState: { hp: 80, maxHP: 100, stamina: 80, maxStamina: 100 }, // Mock avg
+      playerState: { hp: avgHP, maxHP: avgMaxHP, stamina: avgStamina, maxStamina: avgMaxStamina },
       language: room.language,
     });
 
-    this.io.to(room.room_code).emit("npc_event", event);
+    // Select a random player to make the choice
+    const choosingPlayerIndex = Math.floor(Math.random() * players.length);
+    const choosingPlayer = players[choosingPlayerIndex];
 
-    // Store event to log (maybe wait for result? Or log encounter now?)
-    // Let's log it now as 'npc_event'
+    // Store event in game_state with choosing player info
     room.game_state = {
       ...room.game_state,
+      currentNPCEvent: event,
+      npcChoosingPlayerId: choosingPlayer.id,
       adventure_log: [...(room.game_state.adventure_log || []), { type: "npc_event", npc: event.npcName }],
     };
     await room.save();
+
+    // Emit event to all players, but indicate who gets to choose
+    this.io.to(room.room_code).emit("npc_event", {
+      event: event,
+      choosingPlayerId: choosingPlayer.id,
+      choosingPlayerName: choosingPlayer.username,
+    });
   }
 
   async npcChoice({ choiceId }) {
-    // 'positive' or 'negative'
     try {
-      const { roomCode } = this.socket.data;
+      const { roomCode, playerId } = this.socket.data;
       const room = await Room.findOne({ where: { room_code: roomCode } });
-      // We need to know WHICH event it was?
-      // For now, assume client sends choice based on last event.
-      // Also need to know the 'outcome' data.
-      // Ideally we stored the event in game_state. But for simplicity, we might ask client to send back the outcome?
-      // NO, insecure. We should have stored it.
-      // Let's regenerate or store. Storing is properly better.
-      // For THIS implementation, I'll cheat slightly and assume we just re-generate or assume standard effects,
-      // OR better: The client sends the EFFECT values? No.
-      // Let's rely on the fact that we can call generateNPCEvent again deterministically? No AI is random.
+      const players = await Player.findAll({ where: { room_id: room.id } });
 
-      // REVISION: We need to store the current NPC event in `game_state` when we generate it.
-      // I will add `currentNPCEvent` to game_state.
+      if (!room || !room.game_state.currentNPCEvent) {
+        return this.socket.emit("error", { message: "No active NPC event" });
+      }
 
-      // For now, let's just emit a success message as a placeholder if state is missing,
-      // but I should add storage in `triggerNPCEvent`.
+      // Verify the choosing player made the choice
+      if (room.game_state.npcChoosingPlayerId !== playerId) {
+        return this.socket.emit("error", {
+          message: "Only the chosen player can make this decision",
+        });
+      }
 
-      // Actually, let's fix `triggerNPCEvent` to save to DB.
+      // Get the event and find the chosen outcome
+      const currentEvent = room.game_state.currentNPCEvent;
+      const choice = currentEvent.choices.find((c) => c.id === choiceId);
 
+      if (!choice) {
+        return this.socket.emit("error", { message: "Invalid choice" });
+      }
+
+      const effects = choice.outcome.effects;
+
+      // Apply effects to all players
+      await Promise.all(
+        players.map(async (p) => {
+          // Apply HP bonus (both current and max)
+          if (effects.hpBonus) {
+            p.current_hp = Math.max(0, p.current_hp + effects.hpBonus);
+            p.character_data.maxHP = Math.max(1, p.character_data.maxHP + effects.hpBonus);
+          }
+
+          // Apply Stamina bonus (both current and max)
+          if (effects.staminaBonus) {
+            p.current_stamina = Math.max(
+              0,
+              Math.min(p.character_data.maxStamina, p.current_stamina + effects.staminaBonus),
+            );
+            p.character_data.maxStamina = Math.max(1, p.character_data.maxStamina + effects.staminaBonus);
+          }
+
+          // Apply Skill Power bonus
+          if (effects.skillPowerBonus) {
+            p.character_data.skillPower = (p.character_data.skillPower || 1.0) + effects.skillPowerBonus;
+          }
+
+          return p.save();
+        }),
+      );
+
+      // Log the NPC choice result to adventure log
+      const choosingPlayer = players.find((p) => p.id === room.game_state.npcChoosingPlayerId);
+      room.game_state = {
+        ...room.game_state,
+        adventure_log: [
+          ...(room.game_state.adventure_log || []),
+          {
+            type: "npc_choice",
+            npc: currentEvent.npcName,
+            chooser: choosingPlayer.username,
+            choiceId: choiceId,
+            outcome: choice.outcome.narrative,
+            effects: effects,
+          },
+        ],
+        currentNPCEvent: null,
+        npcChoosingPlayerId: null,
+      };
+      await room.save();
+
+      // Broadcast resolution
+      const updatedPlayers = await Player.findAll({ where: { room_id: room.id } });
       this.io.to(roomCode).emit("npc_resolution", {
-        message: "The party chose " + choiceId,
-        // Apply effects logic here if we had the data
+        narrative: choice.outcome.narrative,
+        effects: effects,
+        players: updatedPlayers,
       });
     } catch (e) {
-      console.error(e);
+      console.error("NPC choice error:", e);
+      this.socket.emit("error", { message: "Failed to process NPC choice" });
     }
   }
 
