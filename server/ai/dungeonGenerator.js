@@ -1,4 +1,4 @@
-const gemini = require("../helpers/gemini");
+const { aiHelper } = require("../helpers/aiHelper");
 
 /**
  * Generate a dungeon using AI based on theme, difficulty, and max nodes
@@ -9,7 +9,12 @@ const gemini = require("../helpers/gemini");
  * @param {string} params.language - Language for the dungeon content (e.g., "en", "id", "es")
  * @returns {Promise<Object>} Generated dungeon object
  */
-async function generateDungeon({ theme, difficulty, maxNode, language = "en" }) {
+async function generateDungeon({
+  theme,
+  difficulty,
+  maxNode,
+  language = "en",
+}) {
   // Validate input
   if (!theme || typeof theme !== "string") {
     throw new Error("Theme is required and must be a string");
@@ -100,8 +105,8 @@ Generate ONLY valid JSON with this EXACT structure (no markdown, no code blocks,
 Remember: Node ${maxNode} must be type "enemy" with a "boss" role enemy. Create ${maxNode} nodes total.`;
 
   try {
-    // Call Gemini AI
-    const aiResponse = await gemini("gemini-3-flash-preview", prompt);
+    // Call AI (Groq primary, Gemini fallback)
+    const aiResponse = await aiHelper(prompt);
 
     // Clean the response (remove markdown code blocks if present)
     let cleanedResponse = aiResponse.trim();
@@ -163,7 +168,12 @@ function validateDungeonStructure(dungeon, maxNode) {
 /**
  * Create a fallback dungeon if AI generation fails
  */
-function createFallbackDungeon({ theme, difficulty, maxNode, language = "en" }) {
+function createFallbackDungeon({
+  theme,
+  difficulty,
+  maxNode,
+  language = "en",
+}) {
   const nodes = [];
   const enemies = [];
 
@@ -174,7 +184,11 @@ function createFallbackDungeon({ theme, difficulty, maxNode, language = "en" }) 
 
     if (isEnemyNode) {
       const enemyId = `enemy-${i}`;
-      const role = isLastNode ? "boss" : Math.random() > 0.5 ? "minion" : "elite";
+      const role = isLastNode
+        ? "boss"
+        : Math.random() > 0.5
+          ? "minion"
+          : "elite";
 
       nodes.push({
         id: i,
@@ -185,7 +199,9 @@ function createFallbackDungeon({ theme, difficulty, maxNode, language = "en" }) 
 
       enemies.push({
         id: enemyId,
-        name: isLastNode ? `${theme} Lord` : `${theme} ${role === "elite" ? "Champion" : "Guardian"}`,
+        name: isLastNode
+          ? `${theme} Lord`
+          : `${theme} ${role === "elite" ? "Champion" : "Guardian"}`,
         role: role,
         hp:
           role === "boss"
@@ -212,7 +228,9 @@ function createFallbackDungeon({ theme, difficulty, maxNode, language = "en" }) 
               ? 5 + Math.floor(Math.random() * 3)
               : 3 + Math.floor(Math.random() * 3),
         skillPower: 1.5 + Math.random() * 2.0,
-        archetype: ["warrior", "mage", "assassin"][Math.floor(Math.random() * 3)],
+        archetype: ["warrior", "mage", "assassin"][
+          Math.floor(Math.random() * 3)
+        ],
         skills: [
           {
             name: "Basic Attack",

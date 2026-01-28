@@ -29,6 +29,17 @@ class GameHandler {
 
   async joinRoom({ roomCode, username }) {
     try {
+      // Prevent double join from same socket
+      if (
+        this.socket.data.roomCode === roomCode &&
+        this.socket.data.username === username
+      ) {
+        console.log(
+          `[JOIN] Player ${username} already in room ${roomCode}, ignoring duplicate join`,
+        );
+        return; // Already joined, ignore
+      }
+
       const room = await Room.findOne({ where: { room_code: roomCode } });
       if (!room) {
         return this.socket.emit("error", { message: "Room not found" });
