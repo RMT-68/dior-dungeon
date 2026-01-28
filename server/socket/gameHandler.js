@@ -84,8 +84,13 @@ class GameHandler {
         // Generate Story Thus Far for joining player
         try {
           const history = room.game_state.adventure_log || [];
-          const playersInRoom = await Player.findAll({ where: { room_id: room.id } });
-          const avgHP = Math.round(playersInRoom.reduce((sum, p) => sum + p.current_hp, 0) / playersInRoom.length);
+          const playersInRoom = await Player.findAll({
+            where: { room_id: room.id },
+          });
+          const avgHP = Math.round(
+            playersInRoom.reduce((sum, p) => sum + p.current_hp, 0) /
+              playersInRoom.length,
+          );
           const partyState = {
             playerCount: playersInRoom.length,
             aliveCount: playersInRoom.filter((p) => p.is_alive).length,
@@ -105,6 +110,54 @@ class GameHandler {
           this.socket.emit("story_summary", summary);
         } catch (e) {
           console.error("Error generating summary on join:", e);
+        }
+
+        // Reconnection: Sync Game State to the user
+        const updatedPlayers = await Player.findAll({
+          where: { room_id: room.id },
+        });
+
+        this.socket.emit("game_start", {
+          room,
+          players: updatedPlayers,
+          dungeon: room.dungeon_data,
+          currentNode: room.game_state.currentNode,
+          currentEnemy: room.game_state.currentEnemy,
+        });
+
+        // Restore specific scene state
+        if (room.game_state.currentNPCEvent) {
+          const choosingPlayer = updatedPlayers.find(
+            (p) => p.id === room.game_state.npcChoosingPlayerId,
+          );
+          this.socket.emit("npc_event", {
+            event: room.game_state.currentNPCEvent,
+            choosingPlayerId: room.game_state.npcChoosingPlayerId,
+            choosingPlayerName: choosingPlayer
+              ? choosingPlayer.username
+              : "Unknown",
+          });
+        } else if (room.game_state.currentEnemy) {
+          this.socket.emit("round_started", {
+            round: room.game_state.round,
+            narrative: "Resuming battle...",
+          });
+
+          const currentActions = room.game_state.currentTurnActions || [];
+          const alivePlayers = updatedPlayers.filter((p) => p.is_alive);
+          const playersWhoActed = currentActions.map((a) => a.playerId);
+          const playersStillWaiting = alivePlayers.filter(
+            (p) => !playersWhoActed.includes(p.id),
+          );
+
+          this.socket.emit("waiting_for_players", {
+            actedCount: currentActions.length,
+            totalCount: alivePlayers.length,
+            waitingFor: playersStillWaiting.map((p) => ({
+              id: p.id,
+              username: p.username,
+            })),
+          });
         }
       }
 
@@ -177,7 +230,9 @@ class GameHandler {
       // Initialize game state with first node
       const firstNode = room.dungeon_data.nodes[0];
       const initialEnemy =
-        firstNode.type === "enemy" ? room.dungeon_data.enemies.find((e) => e.id === firstNode.enemyId) : null;
+        firstNode.type === "enemy"
+          ? room.dungeon_data.enemies.find((e) => e.id === firstNode.enemyId)
+          : null;
 
       room.game_state = {
         round: 1,
@@ -257,7 +312,10 @@ class GameHandler {
       if (actionType === "rest") {
         const diceRoll = Math.floor(Math.random() * 6) + 1; // 1d6 for stamina regen
         const staminaRegained = diceRoll;
-        player.current_stamina = Math.min(player.character_data.maxStamina, player.current_stamina + staminaRegained);
+        player.current_stamina = Math.min(
+          player.character_data.maxStamina,
+          player.current_stamina + staminaRegained,
+        );
         await player.save();
 
         const newAction = {
@@ -284,7 +342,9 @@ class GameHandler {
           totalActions: currentActions.length,
         });
 
-        const playersCheck = await Player.findAll({ where: { room_id: room.id } });
+        const playersCheck = await Player.findAll({
+          where: { room_id: room.id },
+        });
         const alivePlayers = playersCheck.filter((p) => p.is_alive);
 
         if (currentActions.length >= alivePlayers.length) {
@@ -294,7 +354,9 @@ class GameHandler {
       }
 
       // Find the skill in character data
-      const skill = player.character_data.skills.find((s) => s.name === (skillName || "Basic Attack"));
+      const skill = player.character_data.skills.find(
+        (s) => s.name === (skillName || "Basic Attack"),
+      );
       const staminaCost = skill ? skill.staminaCost : 1;
 
       // Check if player has enough stamina
@@ -305,7 +367,10 @@ class GameHandler {
       }
 
       // Deduct stamina cost
-      player.current_stamina = Math.max(0, player.current_stamina - staminaCost);
+      player.current_stamina = Math.max(
+        0,
+        player.current_stamina - staminaCost,
+      );
       await player.save();
 
       // Add action
@@ -350,12 +415,17 @@ class GameHandler {
       } else {
         // Emit waiting state - show who has acted and who hasn't
         const playersWhoActed = currentActions.map((a) => a.playerId);
-        const playersStillWaiting = alivePlayers.filter((p) => !playersWhoActed.includes(p.id));
+        const playersStillWaiting = alivePlayers.filter(
+          (p) => !playersWhoActed.includes(p.id),
+        );
 
         this.io.to(roomCode).emit("waiting_for_players", {
           actedCount: currentActions.length,
           totalCount: alivePlayers.length,
-          waitingFor: playersStillWaiting.map((p) => ({ id: p.id, username: p.username })),
+          waitingFor: playersStillWaiting.map((p) => ({
+            id: p.id,
+            username: p.username,
+          })),
         });
       }
     } catch (error) {
@@ -387,7 +457,10 @@ class GameHandler {
     const updatedEnemy = { ...currentEnemy, hp: battleResult.enemyHP.current };
 
     // Process Enemy Action (Damage to players)
-    if (battleResult.enemyAction && battleResult.enemyAction.type === "attack") {
+    if (
+      battleResult.enemyAction &&
+      battleResult.enemyAction.type === "attack"
+    ) {
       const damage = battleResult.enemyAction.finalDamage;
       // Distribute damage (random target or all? Let's say random for now or logic in AI?)
       // The generator doesn't specify TARGET. We'll pick a random alive player.
@@ -401,28 +474,48 @@ class GameHandler {
 
         battleResult.enemyAction.targetName = target.username; // Add target info for client
       }
-    } else if (battleResult.enemyAction && battleResult.enemyAction.type === "heal") {
+    } else if (
+      battleResult.enemyAction &&
+      battleResult.enemyAction.type === "heal"
+    ) {
       // Enemy healed (already handled in enemyHP.current calculation?
       // generateBattleNarration actually updates enemyHP based on Player damage only usually.
       // Let's check logic. The generator calculates "newEnemyHP" from player attacks.
       // It generates enemyAction BUT doesn't apply it to the `newEnemyHP` it returns if it's a heal.
       // We should apply it here if it's a heal.
       if (battleResult.enemyAction.healAmount) {
-        updatedEnemy.hp = Math.min(updatedEnemy.maxHP, updatedEnemy.hp + battleResult.enemyAction.healAmount);
+        updatedEnemy.hp = Math.min(
+          updatedEnemy.maxHP,
+          updatedEnemy.hp + battleResult.enemyAction.healAmount,
+        );
       }
     }
 
     // Regenerate stamina for all alive players (+1 per round)
     players.forEach((p) => {
       if (p.is_alive) {
-        p.current_stamina = Math.min(p.character_data.maxStamina, p.current_stamina + 1);
+        p.current_stamina = Math.min(
+          p.character_data.maxStamina,
+          p.current_stamina + 1,
+        );
       }
     });
     await Promise.all(players.map((p) => p.save()));
 
+    // Calculate round stats
+    const damageDealt = Math.max(0, currentEnemy.hp - updatedEnemy.hp);
+    const hasCritical = damageDealt > 15; // Simple heuristic for now
+
     // Update Game State
     const nextRound = gameState.round + 1;
-    const newLogs = [...gameState.logs, { round: gameState.round, narrative: battleResult.narrative }];
+    const roundLog = {
+      round: gameState.round,
+      narrative: battleResult.narrative,
+      totalDamage: damageDealt,
+      hasCritical: hasCritical,
+    };
+
+    const newLogs = [...gameState.logs, roundLog];
 
     // Check Victory/Defeat
     let battleStatus = "ongoing";
@@ -437,7 +530,9 @@ class GameHandler {
         round: gameState.round,
       };
     }
-    const anyAlive = (await Player.findAll({ where: { room_id: room.id } })).some((p) => p.is_alive);
+    const anyAlive = (
+      await Player.findAll({ where: { room_id: room.id } })
+    ).some((p) => p.is_alive);
     if (!anyAlive) {
       battleStatus = "defeat";
       adventureLogObj = {
@@ -494,18 +589,28 @@ class GameHandler {
     if (battleStatus === "victory") {
       // Handle Victory Logic (XP, gold? simply wait for next node)
       // Maybe auto-trigger summary?
-      const avgHP = Math.round(players.reduce((sum, p) => sum + p.current_hp, 0) / players.length);
+      const avgHP = Math.round(
+        players.reduce((sum, p) => sum + p.current_hp, 0) / players.length,
+      );
       const partyState = {
         aliveCount: players.filter((p) => p.is_alive).length,
         totalCount: players.length,
         averageHP: avgHP,
       };
+
+      // Dynamic Rewards Calculation
+      const baseXP = 50;
+      const xpBonus = currentEnemy.maxHP
+        ? Math.floor(currentEnemy.maxHP / 5)
+        : 10;
+      const goldReward = Math.floor(Math.random() * 50) + 20;
+
       const summary = await generateAfterBattleSummary({
         theme: room.theme,
         enemy: currentEnemy,
-        battleLog: [], // TODO: pass log
+        battleLog: newLogs,
         partyState,
-        rewards: { experience: 100, gold: 50 },
+        rewards: { experience: baseXP + xpBonus, gold: goldReward },
         language: room.language,
       });
       this.io.to(roomCode).emit("battle_summary", summary);
@@ -554,7 +659,9 @@ class GameHandler {
 
       const currentNode = room.game_state.currentNode;
       const players = await Player.findAll({ where: { room_id: room.id } });
-      const avgHP = Math.round(players.reduce((sum, p) => sum + p.current_hp, 0) / players.length);
+      const avgHP = Math.round(
+        players.reduce((sum, p) => sum + p.current_hp, 0) / players.length,
+      );
       const partyState = {
         playerCount: players.length,
         averageHP: avgHP,
@@ -573,7 +680,10 @@ class GameHandler {
       await Promise.all(
         players.map(async (p) => {
           const staminaRegen = Math.ceil(p.character_data.maxStamina / 2);
-          p.current_stamina = Math.min(p.character_data.maxStamina, p.current_stamina + staminaRegen);
+          p.current_stamina = Math.min(
+            p.character_data.maxStamina,
+            p.current_stamina + staminaRegen,
+          );
           return p.save();
         }),
       );
@@ -581,7 +691,9 @@ class GameHandler {
       // Update State
       room.current_node_index = nextIndex;
       const newEnemy =
-        nextNode.type === "enemy" ? room.dungeon_data.enemies.find((e) => e.id === nextNode.enemyId) : null;
+        nextNode.type === "enemy"
+          ? room.dungeon_data.enemies.find((e) => e.id === nextNode.enemyId)
+          : null;
 
       room.game_state = {
         ...room.game_state,
@@ -612,15 +724,30 @@ class GameHandler {
     const currentNode = room.game_state.currentNode;
 
     // Calculate actual party averages
-    const avgHP = Math.round(players.reduce((sum, p) => sum + p.current_hp, 0) / players.length);
-    const avgMaxHP = Math.round(players.reduce((sum, p) => sum + p.character_data.maxHP, 0) / players.length);
-    const avgStamina = Math.round(players.reduce((sum, p) => sum + p.current_stamina, 0) / players.length);
-    const avgMaxStamina = Math.round(players.reduce((sum, p) => sum + p.character_data.maxStamina, 0) / players.length);
+    const avgHP = Math.round(
+      players.reduce((sum, p) => sum + p.current_hp, 0) / players.length,
+    );
+    const avgMaxHP = Math.round(
+      players.reduce((sum, p) => sum + p.character_data.maxHP, 0) /
+        players.length,
+    );
+    const avgStamina = Math.round(
+      players.reduce((sum, p) => sum + p.current_stamina, 0) / players.length,
+    );
+    const avgMaxStamina = Math.round(
+      players.reduce((sum, p) => sum + p.character_data.maxStamina, 0) /
+        players.length,
+    );
 
     const event = await generateNPCEvent({
       theme: room.theme,
       nodeId: currentNode.id,
-      playerState: { hp: avgHP, maxHP: avgMaxHP, stamina: avgStamina, maxStamina: avgMaxStamina },
+      playerState: {
+        hp: avgHP,
+        maxHP: avgMaxHP,
+        stamina: avgStamina,
+        maxStamina: avgMaxStamina,
+      },
       language: room.language,
     });
 
@@ -633,7 +760,10 @@ class GameHandler {
       ...room.game_state,
       currentNPCEvent: event,
       npcChoosingPlayerId: choosingPlayer.id,
-      adventure_log: [...(room.game_state.adventure_log || []), { type: "npc_event", npc: event.npcName }],
+      adventure_log: [
+        ...(room.game_state.adventure_log || []),
+        { type: "npc_event", npc: event.npcName },
+      ],
     };
     await room.save();
 
@@ -678,21 +808,31 @@ class GameHandler {
           // Apply HP bonus (both current and max)
           if (effects.hpBonus) {
             p.current_hp = Math.max(0, p.current_hp + effects.hpBonus);
-            p.character_data.maxHP = Math.max(1, p.character_data.maxHP + effects.hpBonus);
+            p.character_data.maxHP = Math.max(
+              1,
+              p.character_data.maxHP + effects.hpBonus,
+            );
           }
 
           // Apply Stamina bonus (both current and max)
           if (effects.staminaBonus) {
             p.current_stamina = Math.max(
               0,
-              Math.min(p.character_data.maxStamina, p.current_stamina + effects.staminaBonus),
+              Math.min(
+                p.character_data.maxStamina,
+                p.current_stamina + effects.staminaBonus,
+              ),
             );
-            p.character_data.maxStamina = Math.max(1, p.character_data.maxStamina + effects.staminaBonus);
+            p.character_data.maxStamina = Math.max(
+              1,
+              p.character_data.maxStamina + effects.staminaBonus,
+            );
           }
 
           // Apply Skill Power bonus
           if (effects.skillPowerBonus) {
-            p.character_data.skillPower = (p.character_data.skillPower || 1.0) + effects.skillPowerBonus;
+            p.character_data.skillPower =
+              (p.character_data.skillPower || 1.0) + effects.skillPowerBonus;
           }
 
           return p.save();
@@ -700,7 +840,9 @@ class GameHandler {
       );
 
       // Log the NPC choice result to adventure log
-      const choosingPlayer = players.find((p) => p.id === room.game_state.npcChoosingPlayerId);
+      const choosingPlayer = players.find(
+        (p) => p.id === room.game_state.npcChoosingPlayerId,
+      );
       room.game_state = {
         ...room.game_state,
         adventure_log: [
@@ -720,7 +862,9 @@ class GameHandler {
       await room.save();
 
       // Broadcast resolution
-      const updatedPlayers = await Player.findAll({ where: { room_id: room.id } });
+      const updatedPlayers = await Player.findAll({
+        where: { room_id: room.id },
+      });
       this.io.to(roomCode).emit("npc_resolution", {
         narrative: choice.outcome.narrative,
         effects: effects,
@@ -782,7 +926,10 @@ class GameHandler {
       // Auto-submit rest action
       const diceRoll = Math.floor(Math.random() * 6) + 1;
       const staminaRegained = diceRoll;
-      player.current_stamina = Math.min(player.character_data.maxStamina, player.current_stamina + staminaRegained);
+      player.current_stamina = Math.min(
+        player.character_data.maxStamina,
+        player.current_stamina + staminaRegained,
+      );
       await player.save();
 
       const newAction = {
