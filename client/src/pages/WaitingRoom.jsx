@@ -27,7 +27,6 @@ export default function WaitingRoom() {
   const [regenCount, setRegenCount] = useState(0);
   const MAX_REGEN = 3;
   const maxPlayers = 3;
-  const [hasJoined, setHasJoined] = useState(false);
 
   /* ================= SAFETY ================= */
   useEffect(() => {
@@ -44,13 +43,8 @@ export default function WaitingRoom() {
     if (!socket.connected) socket.connect();
     if (!roomCode || !username) return;
 
-    // Prevent double join - only emit join_room once per session using ref
-    if (!hasJoinedRef.current) {
-      hasJoinedRef.current = true;
-      socket.emit("join_room", { roomCode, username });
-    }
-
-    socket.on("room_update", ({ room, players }) => {
+    // Define handler functions
+    const handleRoomUpdate = ({ room, players }) => {
       setRoom(room);
       setPlayers(players);
       setLoading(false);
@@ -77,10 +71,10 @@ export default function WaitingRoom() {
     socket.on("game_start", handleGameStart);
     socket.on("error", handleError);
 
-    // Emit join only once
-    if (!hasJoined) {
+    // Emit join only once using ref
+    if (!hasJoinedRef.current) {
+      hasJoinedRef.current = true;
       socket.emit("join_room", { roomCode, username });
-      setHasJoined(true);
     }
 
     return () => {
@@ -88,7 +82,7 @@ export default function WaitingRoom() {
       socket.off("game_start", handleGameStart);
       socket.off("error", handleError);
     };
-  }, [roomCode, username, navigate, hasJoined]);
+  }, [roomCode, username, navigate]);
 
   const myPlayer = players.find((p) => p.username === username);
 
