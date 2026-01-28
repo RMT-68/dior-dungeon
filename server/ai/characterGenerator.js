@@ -17,6 +17,10 @@ async function generateCharacter({ theme, language = "en" }) {
     throw new Error("Language is required and must be a string");
   }
 
+  // Randomly select a character role
+  const availableRoles = ["Warrior", "Mage", "Rogue", "Paladin", "Ranger", "Cleric"];
+  const selectedRole = availableRoles[Math.floor(Math.random() * availableRoles.length)];
+
   // Design the prompt for AI
   const prompt = `You are a character generator for a fantasy RPG game. Generate a unique and thematic character that fits the dungeon theme provided.
 
@@ -28,7 +32,7 @@ Language: ${language} (Generate ALL text content in this language)
 
 IMPORTANT RULES:
 1. Character should thematically fit the dungeon theme
-2. Character role should be one of: "Warrior", "Mage", "Rogue", "Paladin", "Ranger", "Cleric"
+2. Character role MUST be: "${selectedRole}" (do not deviate from this role)
 3. Attributes:
    - HP: 80-150 (depends on role)
    - Stamina: 1-10 (depends on role)
