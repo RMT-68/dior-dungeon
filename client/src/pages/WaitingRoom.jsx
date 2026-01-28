@@ -1,95 +1,99 @@
-import { useEffect, useState } from "react"
-import { useNavigate, useSearchParams } from "react-router-dom"
-import { socket } from "../socket"
-import "../waiting-room.css"
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { socket } from "../socket";
+import { useLanguage } from "../context/LanguageContext";
+import LanguageToggle from "../components/LanguageToggle";
+import "../waiting-room.css";
 
 export default function WaitingRoom() {
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const { t } = useLanguage();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const roomCode =
-    searchParams.get("room") ||
-    localStorage.getItem("roomCode")
+  const roomCode = searchParams.get("room") || localStorage.getItem("roomCode");
 
-  const username =
-    searchParams.get("name") ||
-    localStorage.getItem("username")
+  const username = searchParams.get("name") || localStorage.getItem("username");
 
-  const [room, setRoom] = useState(null)
-  const [players, setPlayers] = useState([])
-  const [isReady, setIsReady] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [room, setRoom] = useState(null);
+  const [players, setPlayers] = useState([]);
+  const [isReady, setIsReady] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const maxPlayers = 3
+  const maxPlayers = 3;
 
   useEffect(() => {
     if (!roomCode || !username) {
-      navigate("/")
-      return
+      navigate("/");
+      return;
     }
 
-    localStorage.setItem("roomCode", roomCode)
-    localStorage.setItem("username", username)
-  }, [roomCode, username])
+    localStorage.setItem("roomCode", roomCode);
+    localStorage.setItem("username", username);
+  }, [roomCode, username]);
 
   useEffect(() => {
     if (!socket.connected) {
-      socket.connect()
+      socket.connect();
     }
 
     socket.emit("join_room", {
       roomCode,
-      username
-    })
+      username,
+    });
 
     socket.on("room_update", ({ room, players }) => {
-      setRoom(room)
-      setPlayers(players)
-      setLoading(false)
+      setRoom(room);
+      setPlayers(players);
+      setLoading(false);
 
-      const me = players.find(p => p.username === username)
-      if (me) setIsReady(me.is_ready)
-    })
+      const me = players.find((p) => p.username === username);
+      if (me) setIsReady(me.is_ready);
+    });
 
     socket.on("game_start", () => {
-      navigate("/room")
-    })
+      navigate("/room");
+    });
 
     socket.on("error", (err) => {
-      alert(err.message || "Something went wrong")
-      navigate("/")
-    })
+      alert(err.message || "Something went wrong");
+      navigate("/");
+    });
 
     return () => {
-      socket.off("room_update")
-      socket.off("game_start")
-      socket.off("error")
-    }
-  }, [roomCode, username])
+      socket.off("room_update");
+      socket.off("game_start");
+      socket.off("error");
+    };
+  }, [roomCode, username]);
 
   const handleReady = () => {
     socket.emit("player_ready", {
-      isReady: !isReady
-    })
-  }
+      isReady: !isReady,
+    });
+  };
 
   const handleStart = () => {
-    socket.emit("start_game")
-  }
+    socket.emit("start_game");
+  };
 
   const allReady =
-    players.length === maxPlayers &&
-    players.every(p => p.is_ready)
+    players.length === maxPlayers && players.every((p) => p.is_ready);
 
-  const slots = Array.from({ length: maxPlayers })
+  const slots = Array.from({ length: maxPlayers });
 
   return (
     <div className="dungeon-bg">
-      <h2 className="waiting-title">Dungeon Waiting Room</h2>
+      <div
+        className="d-flex justify-content-end p-3"
+        style={{ position: "absolute", top: 0, right: 0 }}
+      >
+        <LanguageToggle />
+      </div>
+      <h2 className="waiting-title">{t("waiting.title")}</h2>
 
       <p className="waiting-sub">
-        Room Code: <strong>{roomCode}</strong>{" "}
-        ({players.length} / {maxPlayers})
+        {t("waiting.roomCode")}: <strong>{roomCode}</strong> ({players.length} /{" "}
+        {maxPlayers})
       </p>
 
       {room?.dungeon_data && (
@@ -137,7 +141,8 @@ export default function WaitingRoom() {
               letterSpacing: 1,
             }}
           >
-            DIFFICULTY: {room.dungeon_data.difficulty.toUpperCase()}
+            {t("waiting.difficulty")}:{" "}
+            {room.dungeon_data.difficulty.toUpperCase()}
           </span>
         </div>
       )}
@@ -145,7 +150,7 @@ export default function WaitingRoom() {
       <div className="waiting-focus">
         <div className="player-cards">
           {slots.map((_, index) => {
-            const player = players[index]
+            const player = players[index];
 
             return (
               <div
@@ -159,40 +164,39 @@ export default function WaitingRoom() {
                   <>
                     <div className="player-name">
                       {player.username}
-                      {player.username === username && " (You)"}
+                      {player.username === username && ` (${t("common.you")})`}
                     </div>
                     <div className="player-status">
-                      {player.is_ready ? "READY" : "WAITING"}
+                      {player.is_ready
+                        ? t("waiting.ready")
+                        : t("waiting.waiting")}
                     </div>
                   </>
                 ) : (
                   <span className="empty-slot">
-                    Waiting for adventurer...
+                    {t("waiting.waitingAdventurer")}
                   </span>
                 )}
               </div>
-            )
+            );
           })}
         </div>
 
         {loading && (
           <p className="text-center text-light opacity-75 mb-3">
-            Connecting to dungeon...
+            {t("waiting.connecting")}
           </p>
         )}
 
         {!loading && players.length < maxPlayers && (
           <p className="text-center text-light opacity-75 mb-3">
-            Waiting for more players...
+            {t("waiting.waitingPlayers")}
           </p>
         )}
 
         <div className="waiting-actions">
-          <button
-            className="btn btn-dungeon"
-            onClick={handleReady}
-          >
-            <span>{isReady ? "UNREADY" : "READY"}</span>
+          <button className="btn btn-dungeon" onClick={handleReady}>
+            <span>{isReady ? t("waiting.unready") : t("waiting.ready")}</span>
           </button>
 
           <button
@@ -200,10 +204,10 @@ export default function WaitingRoom() {
             disabled={!allReady}
             onClick={handleStart}
           >
-            <span>START DUNGEON</span>
+            <span>{t("waiting.startDungeon")}</span>
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }
