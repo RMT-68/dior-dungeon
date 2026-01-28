@@ -280,20 +280,33 @@ class GameHandler {
         currentTurnActions: [], // Track actions for current round
         currentNode: firstNode,
         currentEnemy: initialEnemy, // If undefined, that's fine for NPC nodes
+        currentNPCEvent: null,
+        npcChoosingPlayerId: null,
       };
       await room.save();
 
-      // Notify game start with initial data
+      // Notify game start with COMPLETE authoritative snapshot to all players
+      // This matches the structure of game_state_sync to ensure consistency
       const updatedPlayers = await Player.findAll({
         where: { room_id: room.id },
       });
 
       this.io.to(roomCode).emit("game_start", {
-        room,
-        players: updatedPlayers,
         dungeon: room.dungeon_data,
-        currentNode: firstNode,
-        currentEnemy: initialEnemy,
+        gameState: {
+          round: 1,
+          currentNode: firstNode,
+          currentEnemy: initialEnemy,
+          currentTurnActions: [],
+          currentNPCEvent: null,
+          npcChoosingPlayerId: null,
+          adventureLog: [],
+        },
+        players: updatedPlayers,
+        metadata: {
+          totalPlayers: updatedPlayers.length,
+          alivePlayers: updatedPlayers.filter((p) => p.is_alive).length,
+        },
       });
 
       // If it's an NPC node, trigger event immediately? Or wait for client?
