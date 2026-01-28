@@ -66,10 +66,16 @@ export default function WaitingRoom() {
       navigate("/");
     };
 
+    const handlePlayerDisconnected = ({ username: disconnectedUsername }) => {
+      console.log(`Player ${disconnectedUsername} disconnected`);
+      // Room update will be broadcasted automatically, no need to do anything here
+    };
+
     // Register listeners
     socket.on("room_update", handleRoomUpdate);
     socket.on("game_start", handleGameStart);
     socket.on("error", handleError);
+    socket.on("player_disconnected", handlePlayerDisconnected);
 
     // Emit join only once using ref
     if (!hasJoinedRef.current) {
@@ -81,10 +87,22 @@ export default function WaitingRoom() {
       socket.off("room_update", handleRoomUpdate);
       socket.off("game_start", handleGameStart);
       socket.off("error", handleError);
+      socket.off("player_disconnected", handlePlayerDisconnected);
     };
   }, [roomCode, username, navigate]);
 
   const myPlayer = players.find((p) => p.username === username);
+
+  /* ================= CLEANUP ON LEAVE ================= */
+  useEffect(() => {
+    return () => {
+      // When leaving the waiting room, notify server to remove player
+      if (hasJoinedRef.current) {
+        socket.emit("leave_room");
+        hasJoinedRef.current = false;
+      }
+    };
+  }, []);
 
   /* ================= GENERATE ================= */
   const handleGenerateCharacter = async () => {
@@ -186,6 +204,7 @@ export default function WaitingRoom() {
 
                     {hasChar && player.character_data ? (
                       <div className="character-info">
+                        <div className="character-name">{player.character_data.name}</div>
                         <div className="character-role">{player.character_data.role}</div>
 
                         <div className="character-stats">
