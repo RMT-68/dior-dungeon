@@ -1,8 +1,6 @@
 const { GoogleGenAI } = require("@google/genai");
 
 async function gemini(model, prompt) {
-  console.log("GEMINI_API_KEY =", process.env.GEMINI_API_KEY);
-
   const allowedModels = [
     "gemini-3-flash-preview",
     "gemini-3-pro",

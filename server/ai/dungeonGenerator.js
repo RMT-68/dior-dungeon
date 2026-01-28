@@ -11,10 +11,9 @@ const gemini = require("../helpers/gemini");
  */
 async function generateDungeon({ theme, difficulty, maxNode, language = "en" }) {
   // Validate input
-  const finalTheme =
-  theme && typeof theme === "string"
-    ? theme
-    : "Invent a unique, original, atmospheric dark fantasy dungeon theme";
+  if (!theme || typeof theme !== "string") {
+    throw new Error("Theme is required and must be a string");
+  }
 
   if (!["easy", "medium", "hard"].includes(difficulty)) {
     throw new Error('Difficulty must be "easy", "medium", or "hard"');
@@ -31,7 +30,7 @@ async function generateDungeon({ theme, difficulty, maxNode, language = "en" }) 
   // Design the prompt for AI
   const prompt = `You are a dungeon generator for a fantasy RPG game. Generate a dungeon with the following specifications:
 
-Theme: ${finalTheme}
+Theme: ${theme}
 Difficulty: ${difficulty}
 Number of Nodes: ${maxNode}
 Language: ${language} (Generate ALL text content in this language)
@@ -59,7 +58,7 @@ Generate ONLY valid JSON with this EXACT structure (no markdown, no code blocks,
   "dungeonName": "Creative name for the dungeon",
   "description": "Engaging description of the dungeon atmosphere and story",
   "difficulty": "${difficulty}",
-  "theme": "${finalTheme}",
+  "theme": "${theme}",
   "nodes": [
     {
       "id": 1,
@@ -164,13 +163,7 @@ function validateDungeonStructure(dungeon, maxNode) {
 /**
  * Create a fallback dungeon if AI generation fails
  */
-function createFallbackDungeon({
-  theme = "Dark Fantasy Dungeon",
-  difficulty,
-  maxNode,
-  language = "en"
-}) {
-  
+function createFallbackDungeon({ theme, difficulty, maxNode, language = "en" }) {
   const nodes = [];
   const enemies = [];
 

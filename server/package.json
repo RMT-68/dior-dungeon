@@ -15,7 +15,6 @@
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "genai": "^0.0.18",
     "jest": "^30.2.0",
     "mockery": "^2.1.0",
     "pg": "^8.17.2",
@@ -25,8 +24,5 @@
     "socket.io-client": "^4.8.3",
     "supertest": "^7.2.2",
     "uuid": "^9.0.0"
-  },
-  "devDependencies": {
-    "sequelize-cli": "^6.6.5"
   }
 }
