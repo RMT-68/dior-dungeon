@@ -1,25 +1,32 @@
-import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import MusicPlayer from "../components/MusicPlayer";
 
 export default function CreateDungeon() {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
-  const username = localStorage.getItem("username")
+  const username = localStorage.getItem("username");
 
-  const [difficulty, setDifficulty] = useState("easy")
-  const [maxNode, setMaxNode] = useState(5)
-  const [language, setLanguage] = useState("en")
-  const [theme, setTheme] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [difficulty, setDifficulty] = useState("easy");
+  const [maxNode, setMaxNode] = useState(5);
+  const [language, setLanguage] = useState("en");
+  const [theme, setTheme] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const showError = (message) => {
+    setError(message);
+    setTimeout(() => setError(""), 3000);
+  };
 
   useEffect(() => {
     if (!username) {
-      navigate("/")
+      navigate("/");
     }
-  }, [])
+  }, []);
 
   const handleCreateDungeon = async () => {
-    setLoading(true)
+    setLoading(true);
 
     try {
       const res = await fetch("http://localhost:3000/api/rooms", {
@@ -30,32 +37,50 @@ export default function CreateDungeon() {
           difficulty,
           maxNode,
           language,
-          theme: theme || undefined, 
+          theme: theme || undefined,
         }),
-      })
+      });
 
-      if (!res.ok) throw new Error("Failed to create dungeon")
+      if (!res.ok) throw new Error("Failed to create dungeon");
 
-      const data = await res.json()
-      const roomCode = data.data.room_code
+      const data = await res.json();
+      const roomCode = data.data.room_code;
 
-      localStorage.setItem("roomCode", roomCode)
+      localStorage.setItem("roomCode", roomCode);
 
-      navigate(`/wait?room=${roomCode}`)
+      navigate(`/wait?room=${roomCode}`);
     } catch (err) {
-      console.error(err)
-      alert("Failed to create dungeon")
+      console.error(err);
+      showError("Failed to create dungeon");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="vh-100 dungeon-hero d-flex align-items-center justify-content-center">
+      <div style={{ position: "absolute", top: 16, right: 16 }}>
+        <MusicPlayer />
+      </div>
       <div className="dungeon-form">
         <div className="dungeon-form-inner text-light">
-
           <h3 className="mb-4 text-center">Configure Your Dungeon</h3>
+
+          {/* Error Message */}
+          {error && (
+            <div
+              className="alert alert-danger py-2 mb-3"
+              style={{
+                background: "rgba(220, 53, 69, 0.2)",
+                border: "1px solid #dc3545",
+                color: "#ff6b6b",
+                fontSize: "0.85rem",
+                borderRadius: "8px",
+              }}
+            >
+              ⚠️ {error}
+            </div>
+          )}
 
           <label className="mb-1">Difficulty</label>
           <select
@@ -111,9 +136,8 @@ export default function CreateDungeon() {
           >
             <span>{loading ? "SUMMONING DUNGEON..." : "START DUNGEON"}</span>
           </button>
-
         </div>
       </div>
     </div>
-  )
+  );
 }
