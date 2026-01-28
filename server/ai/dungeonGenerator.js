@@ -42,7 +42,7 @@ IMPORTANT RULES:
    - easy: More NPC nodes, weaker enemies, basic skills
    - medium: Balanced mix, moderate enemies, varied skills
    - hard: More enemy nodes, stronger enemies, complex skills
-4. Enemy roles: "minion" (weak, 30-60 HP), "elite" (strong, 80-120 HP), "boss" (final enemy, 150-250 HP)
+4. Enemy roles: "minion" (weak, 150-300 HP), "elite" (strong, 400-600 HP), "boss" (final enemy, 750-1250 HP)
 5. Each enemy should have stamina (1-10) and skillPower (1.5-3.5) for battle calculations
 6. Each enemy should have 2-4 skills with name, description, type (damage|healing), and amount
    - Damage skills: amount is 10-40 (higher for boss)
@@ -189,16 +189,16 @@ function createFallbackDungeon({ theme, difficulty, maxNode, language = "en" }) 
         role: role,
         hp:
           role === "boss"
-            ? 150 + Math.floor(Math.random() * 100)
+            ? 750 + Math.floor(Math.random() * 500)
             : role === "elite"
-              ? 80 + Math.floor(Math.random() * 40)
-              : 30 + Math.floor(Math.random() * 30),
+              ? 400 + Math.floor(Math.random() * 200)
+              : 150 + Math.floor(Math.random() * 150),
         maxHP:
           role === "boss"
-            ? 150 + Math.floor(Math.random() * 100)
+            ? 750 + Math.floor(Math.random() * 500)
             : role === "elite"
-              ? 80 + Math.floor(Math.random() * 40)
-              : 30 + Math.floor(Math.random() * 30),
+              ? 400 + Math.floor(Math.random() * 200)
+              : 150 + Math.floor(Math.random() * 150),
         stamina:
           role === "boss"
             ? 8 + Math.floor(Math.random() * 3)
