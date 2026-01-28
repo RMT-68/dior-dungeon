@@ -1109,6 +1109,9 @@ class GameHandler {
         }
       }
 
+      // Clear host_id first to avoid foreign key constraint error
+      await Room.update({ host_id: null }, { where: { id: roomId } });
+
       // Delete all players in the room
       const deletedPlayers = await Player.destroy({
         where: { room_id: roomId },
