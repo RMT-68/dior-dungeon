@@ -557,6 +557,8 @@ class GameHandler {
         language: room.language,
       });
 
+      console.log(battleResult);
+
       console.log(`[BATTLE_RESULT] Round ${gameState.round}:`, {
         totalDamage: battleResult.enemyHP.damage,
         enemyHPBefore: battleResult.enemyHP.previous,
