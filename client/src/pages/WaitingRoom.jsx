@@ -14,16 +14,17 @@ export default function WaitingRoom() {
 
   const username = searchParams.get("name") || localStorage.getItem("username");
 
-  const [room, setRoom] = useState(null)
-  const [players, setPlayers] = useState([])
-  const [characterStatus, setCharacterStatus] = useState({})
-  const [isReady, setIsReady] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [generating, setGenerating] = useState(false)
+  const [room, setRoom] = useState(null);
+  const [players, setPlayers] = useState([]);
+  const [characterStatus, setCharacterStatus] = useState({});
+  const [isReady, setIsReady] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [hasJoined, setHasJoined] = useState(false);
 
-  const [regenCount, setRegenCount] = useState(0)
-  const MAX_REGEN = 3
-  const maxPlayers = 3
+  const [regenCount, setRegenCount] = useState(0);
+  const MAX_REGEN = 3;
+  const maxPlayers = 3;
 
   /* ================= SAFETY ================= */
   useEffect(() => {
@@ -31,33 +32,38 @@ export default function WaitingRoom() {
       navigate("/");
       return;
     }
-    localStorage.setItem("roomCode", roomCode)
-    localStorage.setItem("username", username)
-  }, [roomCode, username])
+    localStorage.setItem("roomCode", roomCode);
+    localStorage.setItem("username", username);
+  }, [roomCode, username]);
 
   /* ================= SOCKET ================= */
   useEffect(() => {
-    if (!socket.connected) socket.connect()
+    if (!socket.connected) socket.connect();
 
-    socket.emit("join_room", { roomCode, username })
+    // Prevent double join - only emit join_room once per session
+    if (!hasJoined) {
+      socket.emit("join_room", { roomCode, username });
+      setHasJoined(true);
+    }
 
     socket.on("room_update", ({ room, players }) => {
       setRoom(room);
       setPlayers(players);
       setLoading(false);
 
-      const me = players.find(p => p.username === username)
-      if (me) setIsReady(me.is_ready)
+      const me = players.find((p) => p.username === username);
+      if (me) setIsReady(me.is_ready);
 
-      const statusMap = {}
-      players.forEach(p => {
-        statusMap[p.id] =
-          !!(p.character_data && Object.keys(p.character_data).length > 0)
-      })
-      setCharacterStatus(statusMap)
-    })
+      const statusMap = {};
+      players.forEach((p) => {
+        statusMap[p.id] = !!(
+          p.character_data && Object.keys(p.character_data).length > 0
+        );
+      });
+      setCharacterStatus(statusMap);
+    });
 
-    socket.on("game_start", () => navigate("/game"))
+    socket.on("game_start", () => navigate("/game"));
 
     socket.on("error", (err) => {
       alert(err.message || "Something went wrong");
@@ -71,19 +77,19 @@ export default function WaitingRoom() {
     };
   }, [roomCode, username]);
 
-  const myPlayer = players.find(p => p.username === username)
+  const myPlayer = players.find((p) => p.username === username);
 
   /* ================= GENERATE ================= */
   const handleGenerateCharacter = async () => {
-    if (!myPlayer || !roomCode) return
-    if (regenCount >= MAX_REGEN) return
-    if (generating) return
+    if (!myPlayer || !roomCode) return;
+    if (regenCount >= MAX_REGEN) return;
+    if (generating) return;
 
-    setGenerating(true)
+    setGenerating(true);
 
     try {
-      const isFirst = regenCount === 0
-      const endpoint = isFirst ? "generate" : "regenerate"
+      const isFirst = regenCount === 0;
+      const endpoint = isFirst ? "generate" : "regenerate";
 
       const res = await fetch(
         `http://localhost:3000/api/characters/${myPlayer.id}/${endpoint}`,
@@ -91,43 +97,41 @@ export default function WaitingRoom() {
           method: isFirst ? "POST" : "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomCode }),
-        }
-      )
+        },
+      );
 
-      const json = await res.json()
+      const json = await res.json();
       if (!json?.success) {
-        alert("Generate character failed")
-        return
+        alert("Generate character failed");
+        return;
       }
 
-      const charData = json.data.player.character_data
+      const charData = json.data.player.character_data;
 
-      setPlayers(prev =>
-        prev.map(p =>
-          p.id === myPlayer.id
-            ? { ...p, character_data: charData }
-            : p
-        )
-      )
+      setPlayers((prev) =>
+        prev.map((p) =>
+          p.id === myPlayer.id ? { ...p, character_data: charData } : p,
+        ),
+      );
 
-      setCharacterStatus(prev => ({
+      setCharacterStatus((prev) => ({
         ...prev,
         [myPlayer.id]: true,
-      }))
+      }));
 
-      setRegenCount(prev => prev + 1)
+      setRegenCount((prev) => prev + 1);
     } catch (err) {
-      console.error(err)
-      alert("Generate character failed")
+      console.error(err);
+      alert("Generate character failed");
     } finally {
-      setGenerating(false)
+      setGenerating(false);
     }
-  }
+  };
 
   /* ================= READY / START ================= */
   const handleReady = () => {
-    socket.emit("player_ready", { isReady: !isReady })
-  }
+    socket.emit("player_ready", { isReady: !isReady });
+  };
 
   const handleStart = () => {
     socket.emit("start_game");
@@ -135,7 +139,7 @@ export default function WaitingRoom() {
 
   const allCharactersGenerated =
     players.length === maxPlayers &&
-    players.every(p => characterStatus[p.id])
+    players.every((p) => characterStatus[p.id]);
 
   const slots = Array.from({ length: maxPlayers });
 
@@ -144,7 +148,7 @@ export default function WaitingRoom() {
       <div className="dungeon-bg">
         <p className="opacity-75">Loading dungeon...</p>
       </div>
-    )
+    );
   }
 
   /* ================= RENDER ================= */
@@ -175,9 +179,9 @@ export default function WaitingRoom() {
       <div className="waiting-focus">
         <div className="player-cards">
           {slots.map((_, index) => {
-            const player = players[index]
-            const isYou = player?.username === username
-            const hasChar = player && characterStatus[player.id]
+            const player = players[index];
+            const isYou = player?.username === username;
+            const hasChar = player && characterStatus[player.id];
 
             return (
               <div
@@ -204,14 +208,16 @@ export default function WaitingRoom() {
                         {/* 🔥 FIXED SKILL LAYOUT */}
                         <div className="character-skills">
                           <ul>
-                            {player.character_data.skills?.slice(0, 3).map((s, i) => (
-                              <li key={i}>
-                                <span className="skill-name">{s.name}</span>
-                                <span className={`skill-type ${s.type}`}>
-                                  {s.type === "damage" ? "DMG" : "HEAL"}
-                                </span>
-                              </li>
-                            ))}
+                            {player.character_data.skills
+                              ?.slice(0, 3)
+                              .map((s, i) => (
+                                <li key={i}>
+                                  <span className="skill-name">{s.name}</span>
+                                  <span className={`skill-type ${s.type}`}>
+                                    {s.type === "damage" ? "DMG" : "HEAL"}
+                                  </span>
+                                </li>
+                              ))}
                           </ul>
                         </div>
                       </div>
