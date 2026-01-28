@@ -204,8 +204,8 @@ router.get("/api/character/template", (req, res) => {
     theme: "Vampire Castle",
     hp: 130,
     maxHP: 130,
-    stamina: 70,
-    maxStamina: 70,
+    stamina: 5,
+    maxStamina: 5,
     skillPower: 1.8,
     skills: [
       {
@@ -213,6 +213,7 @@ router.get("/api/character/template", (req, res) => {
         description: "A powerful sword strike",
         type: "damage",
         amount: 28,
+        staminaCost: 1,
       },
     ],
     language: "en",
@@ -307,8 +308,8 @@ router.get("/api/npc/template", (req, res) => {
     playerState: {
       hp: 45,
       maxHP: 120,
-      stamina: 30,
-      maxStamina: 80,
+      stamina: 3,
+      maxStamina: 8,
     },
     language: "en",
   });
@@ -416,8 +417,8 @@ router.get("/api/battle/template", (req, res) => {
       role: "boss",
       hp: 200,
       maxHP: 200,
-      stamina: 90,
-      maxStamina: 90,
+      stamina: 9,
+      maxStamina: 9,
       skillPower: 2.5,
       archetype: "mage",
       skills: [
@@ -426,12 +427,14 @@ router.get("/api/battle/template", (req, res) => {
           description: "Drains life from enemies",
           type: "damage",
           amount: 35,
+          staminaCost: 2,
         },
         {
           name: "Dark Regeneration",
           description: "Regenerates health",
           type: "healing",
           amount: 25,
+          staminaCost: 2,
         },
       ],
     },

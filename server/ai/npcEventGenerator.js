@@ -48,7 +48,7 @@ IMPORTANT RULES:
    - Balance the rewards appropriately
 4. Effects ranges:
    - HP bonus: -10 to +30
-   - Stamina bonus: -10 to +25
+   - Stamina bonus: -3 to +6
    - Skill Power bonus: -0.3 to +0.5
 5. Make choices meaningful and thematic
 6. ALL text must be in ${language} language
@@ -66,7 +66,7 @@ Generate ONLY valid JSON with this EXACT structure (no markdown, no code blocks,
         "narrative": "What happens when this choice is selected",
         "effects": {
           "hpBonus": 20,
-          "staminaBonus": 15,
+          "staminaBonus": 5,
           "skillPowerBonus": 0.3
         }
       }
@@ -78,7 +78,7 @@ Generate ONLY valid JSON with this EXACT structure (no markdown, no code blocks,
         "narrative": "What happens when this choice is selected",
         "effects": {
           "hpBonus": 10,
-          "staminaBonus": 5,
+          "staminaBonus": 2,
           "skillPowerBonus": 0.1
         }
       }
@@ -179,7 +179,7 @@ function createFallbackNPCEvent({ theme, nodeId, playerState, language = "en" })
             narrative: "The healer channels mysterious energy. You feel rejuvenated but exhausted.",
             effects: {
               hpBonus: 30,
-              staminaBonus: -5,
+              staminaBonus: -2,
               skillPowerBonus: 0.2,
             },
           },
@@ -191,7 +191,7 @@ function createFallbackNPCEvent({ theme, nodeId, playerState, language = "en" })
             narrative: "You accept some healing herbs and rest briefly.",
             effects: {
               hpBonus: 15,
-              staminaBonus: 10,
+              staminaBonus: 3,
               skillPowerBonus: 0,
             },
           },
@@ -210,7 +210,7 @@ function createFallbackNPCEvent({ theme, nodeId, playerState, language = "en" })
             narrative: "Working together, you both patch your wounds more effectively.",
             effects: {
               hpBonus: 25,
-              staminaBonus: 5,
+              staminaBonus: 2,
               skillPowerBonus: 0.3,
             },
           },
@@ -241,7 +241,7 @@ function createFallbackNPCEvent({ theme, nodeId, playerState, language = "en" })
             narrative: "The elixir courses through you, restoring your vigor significantly.",
             effects: {
               hpBonus: 5,
-              staminaBonus: 25,
+              staminaBonus: 6,
               skillPowerBonus: 0.2,
             },
           },
@@ -253,7 +253,7 @@ function createFallbackNPCEvent({ theme, nodeId, playerState, language = "en" })
             narrative: "A brief rest and some water restore your energy partially.",
             effects: {
               hpBonus: 8,
-              staminaBonus: 12,
+              staminaBonus: 4,
               skillPowerBonus: 0,
             },
           },
@@ -272,7 +272,7 @@ function createFallbackNPCEvent({ theme, nodeId, playerState, language = "en" })
             narrative: "Ancient power flows through you. Your abilities are enhanced!",
             effects: {
               hpBonus: 10,
-              staminaBonus: 10,
+              staminaBonus: 4,
               skillPowerBonus: 0.5,
             },
           },
@@ -284,7 +284,7 @@ function createFallbackNPCEvent({ theme, nodeId, playerState, language = "en" })
             narrative: "The sage's words inspire you, granting modest benefits.",
             effects: {
               hpBonus: 15,
-              staminaBonus: 8,
+              staminaBonus: 3,
               skillPowerBonus: 0.2,
             },
           },

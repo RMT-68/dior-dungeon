@@ -43,10 +43,11 @@ IMPORTANT RULES:
    - medium: Balanced mix, moderate enemies, varied skills
    - hard: More enemy nodes, stronger enemies, complex skills
 4. Enemy roles: "minion" (weak, 30-60 HP), "elite" (strong, 80-120 HP), "boss" (final enemy, 150-250 HP)
-5. Each enemy should have stamina (40-120) and skillPower (1.5-3.5) for battle calculations
+5. Each enemy should have stamina (1-10) and skillPower (1.5-3.5) for battle calculations
 6. Each enemy should have 2-4 skills with name, description, type (damage|healing), and amount
    - Damage skills: amount is 10-40 (higher for boss)
    - Healing skills: amount is 5-30 (higher for boss)
+   - Each skill should have staminaCost: 1-3 stamina points required to use the skill
 6. NPC nodes provide story moments or choices (not battles)
 7. ALL text (names, descriptions, skills) must be in ${language} language
 8. HP values must be numeric integers appropriate for the role
@@ -79,8 +80,8 @@ Generate ONLY valid JSON with this EXACT structure (no markdown, no code blocks,
       "role": "minion",
       "hp": 50,
       "maxHP": 50,
-      "stamina": 60,
-      "maxStamina": 60,
+      "stamina": 5,
+      "maxStamina": 5,
       "skillPower": 2.0,
       "archetype": "warrior/mage/assassin/tank/support",
       "skills": [
@@ -88,7 +89,8 @@ Generate ONLY valid JSON with this EXACT structure (no markdown, no code blocks,
           "name": "Skill name",
           "description": "Brief skill description",
           "type": "damage | healing",
-          "amount": 25
+          "amount": 25,
+          "staminaCost": 2
         }
       ]
     }
@@ -197,15 +199,49 @@ function createFallbackDungeon({ theme, difficulty, maxNode, language = "en" }) 
             : role === "elite"
               ? 80 + Math.floor(Math.random() * 40)
               : 30 + Math.floor(Math.random() * 30),
-        stamina: 50 + Math.floor(Math.random() * 70),
-        maxStamina: 50 + Math.floor(Math.random() * 70),
+        stamina:
+          role === "boss"
+            ? 8 + Math.floor(Math.random() * 3)
+            : role === "elite"
+              ? 5 + Math.floor(Math.random() * 3)
+              : 3 + Math.floor(Math.random() * 3),
+        maxStamina:
+          role === "boss"
+            ? 8 + Math.floor(Math.random() * 3)
+            : role === "elite"
+              ? 5 + Math.floor(Math.random() * 3)
+              : 3 + Math.floor(Math.random() * 3),
         skillPower: 1.5 + Math.random() * 2.0,
         archetype: ["warrior", "mage", "assassin"][Math.floor(Math.random() * 3)],
         skills: [
-          { name: "Basic Attack", description: "A standard melee or ranged attack", type: "damage", amount: 15 },
-          { name: "Power Strike", description: "A stronger attack with increased damage", type: "damage", amount: 30 },
-          { name: "Dark Magic", description: "Cast a dark spell to damage enemies", type: "damage", amount: 35 },
-          { name: "Shadow Step", description: "Move quickly to evade or reposition", type: "healing", amount: 20 },
+          {
+            name: "Basic Attack",
+            description: "A standard melee or ranged attack",
+            type: "damage",
+            amount: 15,
+            staminaCost: 1,
+          },
+          {
+            name: "Power Strike",
+            description: "A stronger attack with increased damage",
+            type: "damage",
+            amount: 30,
+            staminaCost: 2,
+          },
+          {
+            name: "Dark Magic",
+            description: "Cast a dark spell to damage enemies",
+            type: "damage",
+            amount: 35,
+            staminaCost: 2,
+          },
+          {
+            name: "Shadow Step",
+            description: "Move quickly to evade or reposition",
+            type: "healing",
+            amount: 20,
+            staminaCost: 2,
+          },
         ].slice(0, isLastNode ? 4 : 2),
       });
     } else {
