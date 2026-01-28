@@ -9,7 +9,7 @@ export default function WaitingRoom() {
 
   return (
     <div className="waiting-room dungeon-bg">
-      <h2 className="waiting-title">Dungeon Waiting Room</h2>
+      <h2 className="waiting-title">Waiting Other Players</h2>
       <p className="waiting-sub">Room Code: ABCD (2 / 3)</p>
 
       <div className="waiting-focus">
