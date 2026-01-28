@@ -35,21 +35,24 @@ class GameHandler {
         return this.socket.emit("error", { message: "Room not found" });
       }
 
-      if (room.status !== "waiting" && room.status !== "playing") {
+      // Only allow joining if room is waiting or playing
+      // Reject if finished
+      if (room.status === "finished") {
         return this.socket.emit("error", {
-          message: "Game already in progress",
+          message: "This game has already finished",
         });
       }
 
-      // Check if player already exists in room (optional: reconnect logic)
+      // Check if player already exists in room (for reconnection)
       let player = await Player.findOne({
         where: { room_id: room.id, username },
       });
 
       if (!player) {
+        // New player joining
         if (room.status === "playing") {
           return this.socket.emit("error", {
-            message: "Cannot join started game",
+            message: "Cannot join a game already in progress. Wait for it to finish.",
           });
         }
         player = await Player.create({
@@ -62,8 +65,14 @@ class GameHandler {
           current_stamina: 100, // Placeholder
           character_data: {},
         });
+
+        // Set first player as host if not already set
+        if (!room.host_id) {
+          room.host_id = player.id;
+          await room.save();
+        }
       } else {
-        // Reconnect: update socket ID
+        // Player reconnecting: update socket ID
         player.socket_id = this.socket.id;
         await player.save();
       }
@@ -196,7 +205,13 @@ class GameHandler {
         return this.socket.emit("error", { message: "Room not found" });
       }
 
-      // Verify host (simple check: first player created or stored host_id? For now assume host triggers)
+      // Verify only host can start the game
+      if (room.host_id !== playerId) {
+        return this.socket.emit("error", {
+          message: "Only the host can start the game",
+        });
+      }
+
       // Check all ready
       const players = await Player.findAll({ where: { room_id: room.id } });
       const allReady = players.every((p) => p.is_ready);
@@ -329,18 +344,29 @@ class GameHandler {
           skillPower: 0,
         };
 
-        currentActions.push(newAction);
-        const newGameState = {
-          ...room.game_state,
-          currentTurnActions: currentActions,
+        // Re-fetch room to get latest game_state (prevent race condition)
+        const freshRoom = await Room.findOne({ where: { room_code: roomCode } });
+        const freshActions = freshRoom.game_state.currentTurnActions || [];
+
+        // Check again if player already acted (double-check after potential wait)
+        const stillActed = freshActions.find((a) => a.playerId === playerId);
+        if (stillActed) {
+          return this.socket.emit("error", {
+            message: "You have already acted this turn",
+          });
+        }
+
+        freshActions.push(newAction);
+        freshRoom.game_state = {
+          ...freshRoom.game_state,
+          currentTurnActions: freshActions,
         };
-        room.game_state = newGameState;
-        await room.save();
+        await freshRoom.save();
 
         this.io.to(roomCode).emit("player_action_update", {
           playerId,
           action: newAction,
-          totalActions: currentActions.length,
+          totalActions: freshActions.length,
         });
 
         const playersCheck = await Player.findAll({
@@ -348,7 +374,7 @@ class GameHandler {
         });
         const alivePlayers = playersCheck.filter((p) => p.is_alive);
 
-        if (currentActions.length >= alivePlayers.length) {
+        if (freshActions.length >= alivePlayers.length) {
           await this.resolveBattleRound(roomCode);
         }
         return;
@@ -386,38 +412,49 @@ class GameHandler {
         staminaCost: staminaCost,
       };
 
-      currentActions.push(newAction);
+      // Re-fetch room to get latest game_state (prevent race condition)
+      const freshRoom = await Room.findOne({ where: { room_code: roomCode } });
+      const freshActions = freshRoom.game_state.currentTurnActions || [];
 
-      // Update room state locally (without saving yet to avoid race conditions if many act at once?
-      // Actually with SQL updates we should be careful. Here we just update the JSON.)
+      // Check again if player already acted (double-check after potential concurrent request)
+      const alreadyActedCheck = freshActions.find((a) => a.playerId === playerId);
+      if (alreadyActedCheck) {
+        return this.socket.emit("error", {
+          message: "You have already acted this turn",
+        });
+      }
+
+      freshActions.push(newAction);
+
+      // Update room state with fresh data
       const newGameState = {
-        ...room.game_state,
-        currentTurnActions: currentActions,
+        ...freshRoom.game_state,
+        currentTurnActions: freshActions,
       };
-      room.game_state = newGameState;
-      await room.save(); // Save to persist the action queue
+      freshRoom.game_state = newGameState;
+      await freshRoom.save(); // Save to persist the action queue
 
       // Broadcast action to room (so others see it)
       this.io.to(roomCode).emit("player_action_update", {
         playerId,
         action: newAction,
-        totalActions: currentActions.length,
+        totalActions: freshActions.length,
       });
 
       // Check if all ALIVE players have acted
       const players = await Player.findAll({ where: { room_id: room.id } });
       const alivePlayers = players.filter((p) => p.is_alive);
 
-      if (currentActions.length >= alivePlayers.length) {
+      if (freshActions.length >= alivePlayers.length) {
         // Resolve Turn
         await this.resolveBattleRound(roomCode);
       } else {
         // Emit waiting state - show who has acted and who hasn't
-        const playersWhoActed = currentActions.map((a) => a.playerId);
+        const playersWhoActed = freshActions.map((a) => a.playerId);
         const playersStillWaiting = alivePlayers.filter((p) => !playersWhoActed.includes(p.id));
 
         this.io.to(roomCode).emit("waiting_for_players", {
-          actedCount: currentActions.length,
+          actedCount: freshActions.length,
           totalCount: alivePlayers.length,
           waitingFor: playersStillWaiting.map((p) => ({
             id: p.id,
@@ -631,11 +668,17 @@ class GameHandler {
   async nextNode() {
     try {
       const { playerId, roomCode } = this.socket.data;
-      // Only host can proceed? Or anyone? Let's say anyone for now or need voting.
 
       const room = await Room.findOne({ where: { room_code: roomCode } });
       if (!room) {
         return this.socket.emit("error", { message: "Room not found" });
+      }
+
+      // Only host can proceed to next node
+      if (room.host_id !== playerId) {
+        return this.socket.emit("error", {
+          message: "Only the host can proceed to the next node",
+        });
       }
 
       // Move index
@@ -936,18 +979,26 @@ class GameHandler {
         auto: true, // Flag to indicate auto-submitted action
       };
 
-      currentActions.push(newAction);
-      room.game_state = {
-        ...room.game_state,
-        currentTurnActions: currentActions,
+      // Re-fetch room to get latest game_state (prevent race condition)
+      const freshRoom = await Room.findOne({ where: { room_code: roomCode } });
+      const freshActions = freshRoom.game_state.currentTurnActions || [];
+
+      // Check again if player already acted (double-check after potential wait)
+      const stillActed = freshActions.find((a) => a.playerId === playerId);
+      if (stillActed) return;
+
+      freshActions.push(newAction);
+      freshRoom.game_state = {
+        ...freshRoom.game_state,
+        currentTurnActions: freshActions,
       };
-      await room.save();
+      await freshRoom.save();
 
       // Broadcast auto action
       this.io.to(roomCode).emit("player_action_update", {
         playerId,
         action: newAction,
-        totalActions: currentActions.length,
+        totalActions: freshActions.length,
         auto: true,
       });
 
@@ -964,7 +1015,7 @@ class GameHandler {
       const players = await Player.findAll({ where: { room_id: room.id } });
       const alivePlayers = players.filter((p) => p.is_alive);
 
-      if (currentActions.length >= alivePlayers.length) {
+      if (freshActions.length >= alivePlayers.length) {
         // Resolve the battle round
         await this.resolveBattleRound(roomCode);
       }
