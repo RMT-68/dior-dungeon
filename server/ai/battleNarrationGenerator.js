@@ -62,22 +62,33 @@ Player Actions This Round:
 ${processedActions
   .map((a) => {
     if (a.actionType === "rest") {
-      return `- ${a.playerName}: Took a rest and regained stamina (Dice: ${a.diceRoll}, Stamina Regained: ${a.staminaRegained})`;
+      return `- ${a.playerName}: Took a rest and regained stamina (Stamina Regained: ${a.staminaRegained})`;
     }
-    return `- ${a.playerName}: ${a.actionType === "attack" ? `Attacked with ${a.skillName}` : a.actionType === "heal" ? `Healed with ${a.skillName}` : "Defended"} (Dice: ${a.diceRoll}${a.isCritical ? " CRITICAL!" : ""}${a.isMiss ? " MISS!" : ""})`;
+    if (a.actionType === "attack") {
+      const outcome = a.isMiss ? "MISS" : a.isCritical ? "CRITICAL HIT!" : "HIT";
+      const damageText = a.isMiss ? "no damage" : `${a.finalDamage} damage`;
+      return `- ${a.playerName}: Attacked with ${a.skillName} - ${outcome} (${damageText})`;
+    }
+    if (a.actionType === "heal") {
+      return `- ${a.playerName}: Healed with ${a.skillName} - Restored ${a.finalHeal} HP`;
+    }
+    return `- ${a.playerName}: Defended (reduced incoming damage)`;
   })
   .join("\n")}
 
 Results:
-- Total Damage Dealt: ${totalDamageToEnemy}
+- Total Damage Dealt to Enemy: ${totalDamageToEnemy}
 - Enemy Status: ${enemyDefeated ? "DEFEATED" : "Still Fighting"}
 
-IMPORTANT:
-1. Generate engaging narrative in ${language} language
-2. Describe each player action dramatically
-3. Include dice roll outcomes (critical hits, misses)
-4. Describe enemy reactions and condition
-5. ${
+CRITICAL INSTRUCTIONS:
+1. Generate engaging narrative in ${language} language ONLY
+2. Use the hit/miss/critical information provided above - DO NOT reinterpret dice rolls
+3. If marked "MISS", describe the attack failing to connect
+4. If marked "CRITICAL HIT!", describe extra dramatic, powerful impact
+5. If marked "HIT", describe successful damage
+6. Describe actual damage values shown above, not hypothetical ones
+7. Describe enemy reactions and condition realistically
+8. ${
     !enemyDefeated
       ? `Decide enemy's next action strategically based on:
    - Enemy HP: ${((newEnemyHP / enemy.hp) * 100).toFixed(0)}% remaining
@@ -86,6 +97,8 @@ IMPORTANT:
    - Choose wisely: attack if healthy, heal if HP < 40%, use powerful skills if desperate`
       : "Describe the enemy's defeat dramatically"
   }
+
+REMEMBER: Use only the information above. Do not add your own hit/miss interpretations.
 
 Generate ONLY valid JSON:
 {
