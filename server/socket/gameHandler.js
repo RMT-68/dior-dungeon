@@ -162,7 +162,9 @@ class GameHandler {
   async playerReady({ isReady }) {
     try {
       const { playerId, roomCode } = this.socket.data;
-      if (!playerId || !roomCode) return;
+      if (!playerId || !roomCode) {
+        return this.socket.emit("error", { message: "Invalid session" });
+      }
 
       await Player.update({ is_ready: isReady }, { where: { id: playerId } });
 
@@ -340,8 +342,11 @@ class GameHandler {
       }
 
       // Find the skill in character data
-      const skill = player.character_data.skills.find((s) => s.name === (skillName || "Basic Attack"));
-      const staminaCost = skill ? skill.staminaCost : 1;
+      const skill = player.character_data?.skills?.find((s) => s.name === (skillName || "Basic Attack"));
+      if (!skill) {
+        return this.socket.emit("error", { message: "Skill not found" });
+      }
+      const staminaCost = skill.staminaCost;
 
       // Check if player has enough stamina
       if (player.current_stamina < staminaCost) {
@@ -500,7 +505,7 @@ class GameHandler {
         round: gameState.round,
       };
     }
-    const anyAlive = (await Player.findAll({ where: { room_id: room.id } })).some((p) => p.is_alive);
+    const anyAlive = players.some((p) => p.is_alive);
     if (!anyAlive) {
       battleStatus = "defeat";
       adventureLogObj = {
@@ -532,11 +537,11 @@ class GameHandler {
       enemyAction: battleResult.enemyAction,
       enemy: updatedEnemy,
       battleStatus: battleStatus,
-      players: await Player.findAll({ where: { room_id: room.id } }), // Send updated player states
+      players: players, // Send updated player states
     });
 
     // Clear all action timers for this room
-    const players_db = await Player.findAll({ where: { room_id: room.id } });
+    const players_db = players;
     players_db.forEach((p) => {
       const timerKey = `${roomCode}:${p.id}`;
       if (this.actionTimers.has(timerKey)) {
@@ -712,7 +717,9 @@ class GameHandler {
     await room.save();
 
     // Emit event to all players, but indicate who gets to choose
-    this.io.to(room.room_code).emit("npc_event", {
+    // Use room.room_code from DB or fallback to stored roomCode
+    const roomCodeForEmit = room.room_code || room.room_code;
+    this.io.to(roomCodeForEmit).emit("npc_event", {
       event: event,
       choosingPlayerId: choosingPlayer.id,
       choosingPlayerName: choosingPlayer.username,
@@ -775,6 +782,10 @@ class GameHandler {
 
       // Log the NPC choice result to adventure log
       const choosingPlayer = players.find((p) => p.id === room.game_state.npcChoosingPlayerId);
+      if (!choosingPlayer) {
+        console.error("Choosing player not found");
+        return this.socket.emit("error", { message: "Invalid game state" });
+      }
       room.game_state = {
         ...room.game_state,
         adventure_log: [
