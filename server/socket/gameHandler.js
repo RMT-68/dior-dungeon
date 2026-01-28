@@ -54,13 +54,18 @@ class GameHandler {
         where: { room_id: room.id, username },
       });
 
-      if (!player) {
-        // New player joining
+      if (player) {
+        // Player reconnecting: update socket ID (always allow)
+        player.socket_id = this.socket.id;
+        await player.save();
+      } else {
+        // New player joining - reject if game in progress
         if (room.status === "playing") {
           return this.socket.emit("error", {
             message: "Cannot join a game already in progress. Wait for it to finish.",
           });
         }
+
         player = await Player.create({
           username,
           socket_id: this.socket.id,
@@ -77,10 +82,6 @@ class GameHandler {
           room.host_id = player.id;
           await room.save();
         }
-      } else {
-        // Player reconnecting: update socket ID
-        player.socket_id = this.socket.id;
-        await player.save();
       }
 
       this.socket.join(roomCode);
@@ -518,14 +519,14 @@ class GameHandler {
 
       // Process Enemy Action (Damage to players)
       if (battleResult.enemyAction && battleResult.enemyAction.type === "attack") {
-        const damage = battleResult.enemyAction.finalDamage;
+        const damage = Math.ceil(battleResult.enemyAction.finalDamage || 0); // Round up to ensure integer
         // Distribute damage (random target or all? Let's say random for now or logic in AI?)
         // The generator doesn't specify TARGET. We'll pick a random alive player.
         const alivePlayers = players.filter((p) => p.is_alive);
         if (alivePlayers.length > 0) {
           const targetIndex = Math.floor(Math.random() * alivePlayers.length);
           const target = alivePlayers[targetIndex];
-          target.current_hp = Math.max(0, target.current_hp - damage);
+          target.current_hp = Math.max(0, Math.floor(target.current_hp - damage));
           if (target.current_hp <= 0) target.is_alive = false;
           await target.save();
 
@@ -551,9 +552,11 @@ class GameHandler {
       await Promise.all(players.map((p) => p.save()));
 
       // Calculate round stats from actual player actions
-      const totalDamage = battleResult.playerActions
-        .filter((action) => action.actionType === "attack")
-        .reduce((sum, action) => sum + (action.finalDamage || 0), 0);
+      const totalDamage = Math.round(
+        battleResult.playerActions
+          .filter((action) => action.actionType === "attack")
+          .reduce((sum, action) => sum + (action.finalDamage || 0), 0),
+      ); // Round to integer
 
       const hasCritical = battleResult.playerActions.some((action) => action.isCritical === true);
 
@@ -562,7 +565,7 @@ class GameHandler {
       const roundLog = {
         round: gameState.round,
         narrative: battleResult.narrative,
-        totalDamage: Math.round(totalDamage * 10) / 10, // Round to 1 decimal
+        totalDamage: totalDamage, // Already an integer
         hasCritical: hasCritical,
       };
 

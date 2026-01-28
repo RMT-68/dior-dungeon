@@ -8,9 +8,6 @@ import { useLanguage } from "../context/LanguageContext";
 import LanguageToggle from "../components/LanguageToggle";
 import MusicPlayer from "../components/MusicPlayer";
 
-const USERNAME = localStorage.getItem("username") || "Warrior";
-const ROOM_ID = localStorage.getItem("roomCode") || "demo-room";
-
 // Action icons mapping
 const ACTION_ICONS = {
   attack: "/attack-action.png",
@@ -25,9 +22,11 @@ export default function GameRoom() {
   const { t } = useLanguage();
   const hasJoinedRef = useRef(false);
 
-  const [messages, setMessages] = useState([
-    { id: 1, type: "system", text: "Waiting for dungeon master..." },
-  ]);
+  // Read from localStorage inside component to get fresh values
+  const USERNAME = localStorage.getItem("username") || "Warrior";
+  const ROOM_ID = localStorage.getItem("roomCode") || "demo-room";
+
+  const [messages, setMessages] = useState([{ id: 1, type: "system", text: "Waiting for dungeon master..." }]);
 
   const [dungeon, setDungeon] = useState(null);
   const [currentNode, setCurrentNode] = useState(null);
@@ -89,10 +88,7 @@ export default function GameRoom() {
     socket.on("join_room_success", (data) => {
       setMyPlayerId(data.playerId);
       setIsHost(data.isHost);
-      addMessage(
-        "system",
-        `Welcome ${data.username}! You joined room ${data.roomCode}`,
-      );
+      addMessage("system", `Welcome ${data.username}! You joined room ${data.roomCode}`);
     });
 
     socket.on("room_update", (data) => {
@@ -121,22 +117,12 @@ export default function GameRoom() {
       setCurrentEnemy(data.currentEnemy);
       if (data.players) setPlayers(data.players);
 
-      addMessage(
-        "system",
-        `⚔️ Adventure begins in ${data.dungeon?.dungeonName || "the dungeon"}!`,
-      );
+      addMessage("system", `⚔️ Adventure begins in ${data.dungeon?.dungeonName || "the dungeon"}!`);
       if (data.currentNode) {
-        addMessage(
-          "narration",
-          `📍 ${data.currentNode.name}: ${data.currentNode.description}`,
-        );
+        addMessage("narration", `📍 ${data.currentNode.name}: ${data.currentNode.description}`);
       }
       if (data.currentEnemy) {
-        addMessage(
-          "enemy",
-          `👹 ${data.currentEnemy.name} appears! (HP: ${data.currentEnemy.hp})`,
-          ACTION_ICONS.attack,
-        );
+        addMessage("enemy", `👹 ${data.currentEnemy.name} appears! (HP: ${data.currentEnemy.hp})`, ACTION_ICONS.attack);
       }
     });
 
@@ -148,8 +134,7 @@ export default function GameRoom() {
     });
 
     socket.on("player_action_update", (data) => {
-      const actionIcon =
-        data.action.type === "heal" ? ACTION_ICONS.heal : ACTION_ICONS.attack;
+      const actionIcon = data.action.type === "heal" ? ACTION_ICONS.heal : ACTION_ICONS.attack;
       const actionText =
         data.action.type === "rest"
           ? `${data.action.playerName} rests and recovers ${data.action.staminaRegained} stamina`
@@ -164,29 +149,21 @@ export default function GameRoom() {
       // Individual player actions
       if (data.playerNarratives) {
         data.playerNarratives.forEach((pn) => {
-          const icon =
-            pn.type === "heal" ? ACTION_ICONS.heal : ACTION_ICONS.attack;
+          const icon = pn.type === "heal" ? ACTION_ICONS.heal : ACTION_ICONS.attack;
           addMessage("action", pn.narrative, icon);
         });
       }
 
       // Enemy action
       if (data.enemyAction) {
-        addMessage(
-          "enemy",
-          `👹 ${data.enemyAction.narrative}`,
-          ACTION_ICONS.attack,
-        );
+        addMessage("enemy", `👹 ${data.enemyAction.narrative}`, ACTION_ICONS.attack);
       }
 
       // Update enemy state
       if (data.enemy) {
         setCurrentEnemy(data.enemy);
         if (data.enemy.hp > 0) {
-          addMessage(
-            "status",
-            `Enemy HP: ${data.enemy.hp}/${data.enemy.maxHP || "???"}`,
-          );
+          addMessage("status", `Enemy HP: ${data.enemy.hp}/${data.enemy.maxHP || "???"}`);
         }
       }
 
@@ -198,11 +175,7 @@ export default function GameRoom() {
 
     socket.on("battle_summary", (data) => {
       setBattleSummary(data);
-      addMessage(
-        "victory",
-        `🎉 Victory! ${data.summary}`,
-        ACTION_ICONS.victory,
-      );
+      addMessage("victory", `🎉 Victory! ${data.summary}`, ACTION_ICONS.victory);
       if (data.quote) {
         addMessage("quote", `"${data.quote}"`);
       }
@@ -214,11 +187,11 @@ export default function GameRoom() {
       setNpcEvent(data.event);
       setNpcChoosingPlayerId(data.choosingPlayerId);
 
-      addMessage("npc", `🧙 ${data.event.npcName}: "${data.event.dialogue}"`);
+      addMessage("npc", `🧙 ${data.event.npcName}\n${data.event.description}`);
       addMessage("system", `${data.choosingPlayerName} must make a choice...`);
 
       data.event.choices?.forEach((choice, idx) => {
-        addMessage("choice", `  ${idx + 1}. ${choice.text}`);
+        addMessage("choice", `  ${idx + 1}. ${choice.label}`);
       });
     });
 
@@ -254,8 +227,7 @@ export default function GameRoom() {
       setGameStatus("finished");
       setGameOverData(data);
 
-      const isVictory =
-        data.legendStatus === "legendary" || data.legendStatus === "heroic";
+      const isVictory = data.legendStatus === "legendary" || data.legendStatus === "heroic";
       const icon = isVictory ? ACTION_ICONS.victory : ACTION_ICONS.gameover;
 
       addMessage("gameover", `🏆 ${data.summary}`, icon);
@@ -269,10 +241,7 @@ export default function GameRoom() {
 
     // ============ WAITING & TIMEOUT ============
     socket.on("waiting_for_players", (data) => {
-      addMessage(
-        "system",
-        `Waiting for ${data.waitingOn?.length || 0} players to act...`,
-      );
+      addMessage("system", `Waiting for ${data.waitingOn?.length || 0} players to act...`);
     });
 
     socket.on("action_timeout", (data) => {
@@ -319,8 +288,8 @@ export default function GameRoom() {
     });
   };
 
-  const handleNpcChoice = (choiceIndex) => {
-    socket.emit("npc_choice", { choiceIndex });
+  const handleNpcChoice = (choiceId) => {
+    socket.emit("npc_choice", { choiceId });
   };
 
   const handleNextNode = () => {
@@ -364,8 +333,7 @@ export default function GameRoom() {
           </h4>
           <small className="text-muted">
             Round: {currentRound} | Status: {gameStatus.toUpperCase()}
-            {currentEnemy &&
-              ` | Enemy: ${currentEnemy.name} (HP: ${currentEnemy.hp})`}
+            {currentEnemy && ` | Enemy: ${currentEnemy.name} (HP: ${currentEnemy.hp})`}
           </small>
         </div>
         <div className="d-flex align-items-center gap-2">
@@ -396,21 +364,14 @@ export default function GameRoom() {
                     disabled={character.stamina < (skill.staminaCost || 0)}
                   >
                     <img
-                      src={
-                        skill.type === "heal"
-                          ? ACTION_ICONS.heal
-                          : ACTION_ICONS.attack
-                      }
+                      src={skill.type === "heal" ? ACTION_ICONS.heal : ACTION_ICONS.attack}
                       alt={skill.type}
                       style={{ width: 20, height: 20 }}
                     />
                     {skill.name} ({skill.staminaCost || 0} SP)
                   </button>
                 ))}
-                <button
-                  className="btn btn-warning btn-sm"
-                  onClick={() => handleAction("rest")}
-                >
+                <button className="btn btn-warning btn-sm" onClick={() => handleAction("rest")}>
                   🛌 Rest
                 </button>
               </div>
@@ -418,38 +379,36 @@ export default function GameRoom() {
           )}
 
           {/* NPC Choices */}
-          {gameStatus === "npc_event" &&
-            npcEvent &&
-            myPlayerId === npcChoosingPlayerId && (
-              <div className="p-2 bg-info border-top border-dark">
-                <p className="mb-2 text-dark fw-bold">Make your choice:</p>
-                <div className="d-flex gap-2 flex-wrap">
-                  {npcEvent.choices?.map((choice, idx) => (
-                    <button
-                      key={idx}
-                      className="btn btn-dark btn-sm"
-                      onClick={() => handleNpcChoice(idx)}
-                    >
-                      {choice.text}
-                    </button>
-                  ))}
-                </div>
+          {gameStatus === "npc_event" && npcEvent && (
+            <div className="p-2 bg-info border-top border-dark">
+              <p className="mb-2 text-dark fw-bold">
+                {myPlayerId === npcChoosingPlayerId ? "Make your choice:" : "Waiting for decision..."}
+              </p>
+              <div className="d-flex gap-2 flex-wrap">
+                {npcEvent.choices?.map((choice, idx) => (
+                  <button
+                    key={idx}
+                    className="btn btn-dark btn-sm"
+                    onClick={() => handleNpcChoice(choice.id)}
+                    disabled={myPlayerId !== npcChoosingPlayerId}
+                  >
+                    {choice.label}
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
+          )}
 
           {/* Next Node Button (after victory) */}
-          {battleSummary && isHost && (
+          {battleSummary && (
             <div className="p-2 bg-success border-top border-dark text-center">
-              <button className="btn btn-light" onClick={handleNextNode}>
+              <button className="btn btn-light" onClick={handleNextNode} disabled={!isHost}>
                 ➡️ Continue to Next Area
               </button>
             </div>
           )}
 
-          <CommandInput
-            onSend={handleSendMessage}
-            disabled={!character.isAlive || gameStatus === "finished"}
-          />
+          <CommandInput onSend={handleSendMessage} disabled={!character.isAlive || gameStatus === "finished"} />
         </div>
 
         {/* Right Panel - Character & Enemy Info */}
@@ -494,11 +453,7 @@ export default function GameRoom() {
                   {character.skills.map((s, i) => (
                     <li key={i}>
                       <img
-                        src={
-                          s.type === "heal"
-                            ? ACTION_ICONS.heal
-                            : ACTION_ICONS.attack
-                        }
+                        src={s.type === "heal" ? ACTION_ICONS.heal : ACTION_ICONS.attack}
                         alt={s.type}
                         style={{ width: 14, height: 14, marginRight: 4 }}
                       />
@@ -531,9 +486,7 @@ export default function GameRoom() {
                     {currentEnemy.hp}/{currentEnemy.maxHP || "???"}
                   </small>
                 </div>
-                <small className="text-muted">
-                  {currentEnemy.role || currentEnemy.description}
-                </small>
+                <small className="text-muted">{currentEnemy.role || currentEnemy.description}</small>
               </div>
             </div>
           )}
@@ -544,8 +497,7 @@ export default function GameRoom() {
               <div className="card-body text-center">
                 <img
                   src={
-                    gameOverData.legendStatus === "legendary" ||
-                    gameOverData.legendStatus === "heroic"
+                    gameOverData.legendStatus === "legendary" || gameOverData.legendStatus === "heroic"
                       ? ACTION_ICONS.victory
                       : ACTION_ICONS.gameover
                   }
@@ -553,9 +505,7 @@ export default function GameRoom() {
                   className="img-fluid mb-2"
                   style={{ maxHeight: 100 }}
                 />
-                <h5 className="text-warning">
-                  {gameOverData.legendStatus?.toUpperCase()}
-                </h5>
+                <h5 className="text-warning">{gameOverData.legendStatus?.toUpperCase()}</h5>
                 <p className="small">{gameOverData.epitaph}</p>
               </div>
             </div>
