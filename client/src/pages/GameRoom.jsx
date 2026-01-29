@@ -125,9 +125,14 @@ export default function GameRoom() {
     };
 
     const handleRoomUpdate = (data) => {
+      console.log("[ROOM_UPDATE] Received:", data);
       if (data.players) {
         setPlayers(data.players);
-        const myPlayer = data.players.find((p) => p.id === myPlayerId);
+        // Use localStorage as fallback for closure issue
+        const currentPlayerId = myPlayerId || localStorage.getItem("playerId");
+        const myPlayer = data.players.find(
+          (p) => p.id === currentPlayerId || p.id === parseInt(currentPlayerId),
+        );
         if (myPlayer) {
           updateCharacterFromPlayer(myPlayer);
         }
@@ -136,6 +141,8 @@ export default function GameRoom() {
 
     // ===== GAME START =====
     const handleGameStart = (data) => {
+      console.log("[GAME_START] Received data:", data);
+
       // Hydrate from complete authoritative snapshot
       setGameStatus("playing");
       setDungeon(data.dungeon);
@@ -147,12 +154,21 @@ export default function GameRoom() {
       setNpcEvent(null);
 
       // Update my character from players data
-      // Note: myPlayerId should be set by join_room_success which arrives first
-      const myPlayer = data.players?.find((p) => p.id === myPlayerId);
+      // Use localStorage playerId as fallback since myPlayerId might not be set yet
+      const currentPlayerId = myPlayerId || localStorage.getItem("playerId");
+      const myPlayer = data.players?.find(
+        (p) => p.id === currentPlayerId || p.id === parseInt(currentPlayerId),
+      );
       if (myPlayer) {
-        console.log(myPlayer);
-
+        console.log("[GAME_START] Found my player:", myPlayer);
         updateCharacterFromPlayer(myPlayer);
+      } else {
+        console.log(
+          "[GAME_START] Could not find my player. myPlayerId:",
+          currentPlayerId,
+          "players:",
+          data.players,
+        );
       }
 
       addMessage(
@@ -176,6 +192,8 @@ export default function GameRoom() {
 
     // ===== GAME STATE SYNC (Reconnection) =====
     const handleGameStateSync = (data) => {
+      console.log("[GAME_STATE_SYNC] Received data:", data);
+
       // Hydrate from complete authoritative snapshot (same as game_start)
       setDungeon(data.dungeon);
       setCurrentRound(data.gameState?.round || 1);
@@ -183,8 +201,15 @@ export default function GameRoom() {
       setCurrentEnemy(data.gameState?.currentEnemy || null);
       setPlayers(data.players || []);
 
-      // Update my character from players data
-      const myPlayer = data.players?.find((p) => p.id === myPlayerId);
+      // Set hostId if available
+      if (data.room?.host_id) {
+        setHostId(data.room.host_id);
+        setIsHost(data.playerId === data.room.host_id);
+      }
+
+      // Update my character from players data - use data.playerId from server
+      const currentPlayerId = data.playerId || myPlayerId;
+      const myPlayer = data.players?.find((p) => p.id === currentPlayerId);
       if (myPlayer) {
         updateCharacterFromPlayer(myPlayer);
       }
