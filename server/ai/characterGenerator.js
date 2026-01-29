@@ -42,7 +42,7 @@ IMPORTANT RULES:
 1. Character should thematically fit the dungeon theme
 2. Character role MUST be: "${selectedRole}" (do not deviate from this role)
 3. Attributes:
-   - HP: 80-150 (depends on role)
+   - HP: 300-500 (depends on role)
    - Stamina: 1-10 (depends on role)
    - Skill Power: 1.5-3.5 multiplier (higher for magic users, lower for physical users)
 4. Skills array should contain 3-4 unique skills that match the character role and theme
@@ -53,12 +53,12 @@ IMPORTANT RULES:
 9. ALL text (name, role, skills) must be in ${language} language
 
 Character Role HP ranges:
-- Warrior: 120-150 HP, 4-6 Stamina, 1.5-2.0 Skill Power
-- Mage: 80-110 HP, 8-10 Stamina, 2.5-3.5 Skill Power
-- Rogue: 90-120 HP, 6-9 Stamina, 2.0-2.8 Skill Power
-- Paladin: 110-140 HP, 4-6 Stamina, 2.0-2.5 Skill Power
-- Ranger: 100-130 HP, 6-9 Stamina, 2.0-2.8 Skill Power
-- Cleric: 95-125 HP, 7-9 Stamina, 2.0-2.8 Skill Power
+- Warrior: 450-500 HP, 4-6 Stamina, 1.5-2.0 Skill Power 
+- Mage: 300-450 HP, 8-10 Stamina, 2.5-3.5 Skill Power
+- Rogue: 330-470 HP, 6-9 Stamina, 2.0-2.8 Skill Power
+- Paladin: 440-500 HP, 4-6 Stamina, 2.0-2.5 Skill Power
+- Ranger: 320-350 HP, 6-9 Stamina, 2.0-2.8 Skill Power
+- Cleric: 345-405 HP, 7-9 Stamina, 2.0-2.8 Skill Power
 
 Generate ONLY valid JSON with this EXACT structure (no markdown, no code blocks, just pure JSON):
 
