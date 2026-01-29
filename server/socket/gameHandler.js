@@ -1188,7 +1188,17 @@ class GameHandler {
       const room = await Room.findOne({ where: { room_code: roomCode } });
       if (!room) return;
 
-      // Remove player from room
+      // Don't remove players if game is in progress or already finished
+      if (room.status === "playing" || room.status === "finished") {
+        console.log(
+          `[LEAVE_ROOM] Player ${username} tried to leave during ${room.status} - keeping in DB for reconnection`,
+        );
+        // Just remove from socket room, don't delete from DB
+        this.socket.leave(roomCode);
+        return;
+      }
+
+      // Remove player from room (only during waiting status)
       await Player.destroy({ where: { id: playerId } });
       console.log(`Player ${username} (ID: ${playerId}) left room ${roomCode}`);
 

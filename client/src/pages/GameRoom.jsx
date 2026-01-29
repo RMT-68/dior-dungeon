@@ -111,12 +111,16 @@ export default function GameRoom() {
     // ===== JOIN & SETUP EVENTS =====
     const handleJoinSuccess = (data) => {
       setMyPlayerId(data.playerId);
+      console.log("[JOIN_SUCCESS] PlayerId:", data.playerId);
+
       setIsHost(data.isHost);
       localStorage.setItem("playerId", data.playerId);
+      localStorage.setItem("username", data.username);
       addMessage("system", `Welcome ${data.username}! You joined room ${data.roomCode}`);
     };
 
     const handleRoomUpdate = (data) => {
+      console.log(data);
       if (data.players) {
         setPlayers(data.players);
         const myPlayer = data.players.find((p) => p.id === myPlayerId);
@@ -128,6 +132,8 @@ export default function GameRoom() {
 
     // ===== GAME START =====
     const handleGameStart = (data) => {
+      console.log("[GAME_START] Received game start event:", data);
+
       // Hydrate from complete authoritative snapshot
       setGameStatus("playing");
       setDungeon(data.dungeon);
@@ -138,13 +144,25 @@ export default function GameRoom() {
       setBattleSummary(null);
       setNpcEvent(null);
 
-      // Update my character from players data
-      // Note: myPlayerId should be set by join_room_success which arrives first
-      const myPlayer = data.players?.find((p) => p.id === myPlayerId);
-      if (myPlayer) {
-        console.log(myPlayer);
+      // Find my player - use myPlayerId state or fallback to PLAYER_ID from localStorage
+      const currentPlayerId = myPlayerId || PLAYER_ID;
+      console.log("[GAME_START] Looking for player with ID:", currentPlayerId);
+      console.log(
+        "[GAME_START] Available players:",
+        data.players?.map((p) => ({ id: p.id, username: p.username })),
+      );
 
+      const myPlayer = data.players?.find((p) => p.id === currentPlayerId);
+      if (myPlayer) {
+        console.log("[GAME_START] Found my player:", myPlayer);
         updateCharacterFromPlayer(myPlayer);
+
+        // Ensure myPlayerId is set if it wasn't already
+        if (!myPlayerId) {
+          setMyPlayerId(myPlayer.id);
+        }
+      } else {
+        console.warn("[GAME_START] Could not find my player in players list!");
       }
 
       addMessage("system", `⚔️ Adventure begins in ${data.dungeon?.dungeonName || "the dungeon"}!`);
@@ -387,14 +405,31 @@ export default function GameRoom() {
     socket.on("player_reconnected", handlePlayerReconnected);
 
     // NOW emit join_room after all listeners are registered
+    // Only join if not already in room or truly reconnecting
     if (!hasJoinedRef.current) {
       hasJoinedRef.current = true;
-      if (PLAYER_ID) {
+
+      // Check if user just transitioned from waiting room (game just started)
+      const gameJustStarted = localStorage.getItem("gameJustStarted") === "true";
+
+      if (gameJustStarted) {
+        // Coming from waiting room - already in socket room, just set state
+        console.log("[GAME_START] Transitioning from waiting room, already connected");
+        localStorage.removeItem("gameJustStarted"); // Clear flag
+        setMyPlayerId(PLAYER_ID);
+        // Don't emit join_room - already in the room from waiting room
+        // Just wait for game_start event
+      } else if (PLAYER_ID) {
+        // True reconnection - rejoin with playerId
+        console.log("[RECONNECT] Rejoining room with playerId:", PLAYER_ID);
         socket.emit("join_room", {
           roomCode: ROOM_ID,
           playerId: PLAYER_ID,
+          username: USERNAME,
         });
       } else {
+        // New join without playerId (shouldn't happen in normal flow)
+        console.log("[NEW_JOIN] Joining room as new player:", USERNAME);
         socket.emit("join_room", {
           roomCode: ROOM_ID,
           username: USERNAME,

@@ -54,13 +54,24 @@ export default function WaitingRoom() {
     if (!roomCode || !username) return;
 
     // Define handler functions
+    const handleJoinRoomSuccess = (data) => {
+      console.log("[WAITING_ROOM] Join success:", data);
+      // Store playerId for later use in game room
+      localStorage.setItem("playerId", data.playerId);
+      localStorage.setItem("username", data.username);
+    };
+
     const handleRoomUpdate = ({ room, players }) => {
       setRoom(room);
       setPlayers(players);
       setLoading(false);
 
       const me = players.find((p) => p.username === username);
-      if (me) setIsReady(me.is_ready);
+      if (me) {
+        setIsReady(me.is_ready);
+        // Also store playerId from room_update
+        localStorage.setItem("playerId", me.id);
+      }
 
       const statusMap = {};
       players.forEach((p) => {
@@ -69,7 +80,11 @@ export default function WaitingRoom() {
       setCharacterStatus(statusMap);
     };
 
-    const handleGameStart = () => navigate("/game");
+    const handleGameStart = () => {
+      // Set flag to indicate coming from waiting room (game just started)
+      localStorage.setItem("gameJustStarted", "true");
+      navigate("/game");
+    };
 
     const handleError = (err) => {
       Swal.fire({
@@ -86,6 +101,7 @@ export default function WaitingRoom() {
     };
 
     // Register listeners
+    socket.on("join_room_success", handleJoinRoomSuccess);
     socket.on("room_update", handleRoomUpdate);
     socket.on("game_start", handleGameStart);
     socket.on("error", handleError);
@@ -98,6 +114,7 @@ export default function WaitingRoom() {
     }
 
     return () => {
+      socket.off("join_room_success", handleJoinRoomSuccess);
       socket.off("room_update", handleRoomUpdate);
       socket.off("game_start", handleGameStart);
       socket.off("error", handleError);
@@ -110,10 +127,17 @@ export default function WaitingRoom() {
   /* ================= CLEANUP ON LEAVE ================= */
   useEffect(() => {
     return () => {
-      // When leaving the waiting room, notify server to remove player
-      if (hasJoinedRef.current) {
+      // Only leave room if NOT transitioning to game
+      // Check if gameJustStarted flag is set (means we're going to game room)
+      const isGoingToGame = localStorage.getItem("gameJustStarted") === "true";
+
+      if (hasJoinedRef.current && !isGoingToGame) {
+        // True exit - user actually leaving (back button, close tab, etc)
+        console.log("[WAITING_ROOM] Leaving room - emitting leave_room");
         socket.emit("leave_room");
         hasJoinedRef.current = false;
+      } else if (isGoingToGame) {
+        console.log("[WAITING_ROOM] Transitioning to game room - NOT leaving socket room");
       }
     };
   }, []);
