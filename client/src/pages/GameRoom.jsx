@@ -429,6 +429,7 @@ export default function GameRoom() {
 
   /**
    * Handle player action: skill or rest.
+   * Sends complete skill object for validation on server.
    */
   const handleAction = (skill) => {
     if (!character.isAlive) return;
@@ -442,11 +443,16 @@ export default function GameRoom() {
     const typeMap = { damage: "attack", heal: "heal", defend: "defend" };
     const actionType = typeMap[skill.type] || "attack";
 
+    // Send complete skill object for proper server-side validation
     socket.emit("player_action", {
       actionType,
-      skillName: skill.name,
-      skillAmount: skill.amount || 10,
-      skillId: skill.id,
+      skill: {
+        id: skill.id,
+        name: skill.name,
+        type: skill.type,
+        amount: skill.amount || 10,
+        staminaCost: skill.staminaCost || 0,
+      },
     });
   };
 

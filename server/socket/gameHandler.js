@@ -323,7 +323,7 @@ class GameHandler {
   async playerAction(data) {
     try {
       const { playerId, roomCode } = this.socket.data;
-      const { actionType, skillName, skillAmount, skillId } = data;
+      const { actionType, skill } = data;
 
       if (!playerId || !roomCode) {
         return this.socket.emit("error", { message: "Invalid session" });
@@ -367,7 +367,7 @@ class GameHandler {
 
       // Handle REST action
       if (actionType === "rest") {
-        const diceRoll = Math.floor(Math.random() * 6) + 1; // 1d6 for stamina regen
+        const diceRoll = Math.floor(Math.random() * 6) + 1;
         const staminaRegained = diceRoll;
         player.current_stamina = Math.min(player.character_data.maxStamina, player.current_stamina + staminaRegained);
         await player.save();
@@ -376,31 +376,26 @@ class GameHandler {
           playerId,
           playerName: player.username,
           type: "rest",
-          skillName: "Rest",
-          staminaRegained: staminaRegained,
           diceRoll: diceRoll,
-          skillPower: 0,
+          staminaRegained: staminaRegained,
         };
 
-        // Re-fetch room to get latest game_state (prevent race condition)
-        const freshRoom = await Room.findOne({
-          where: { room_code: roomCode },
+        console.log(`[ACTION] ${player.username} rests:`, {
+          diceRoll,
+          staminaRegained,
+          newStamina: player.current_stamina,
         });
+
+        const freshRoom = await Room.findOne({ where: { room_code: roomCode } });
         const freshActions = freshRoom.game_state.currentTurnActions || [];
 
-        // Check again if player already acted (double-check after potential wait)
-        const stillActed = freshActions.find((a) => a.playerId === playerId);
-        if (stillActed) {
-          return this.socket.emit("error", {
-            message: "You have already acted this turn",
-          });
+        const alreadyActedCheck = freshActions.find((a) => a.playerId === playerId);
+        if (alreadyActedCheck) {
+          return this.socket.emit("error", { message: "You have already acted this turn" });
         }
 
         freshActions.push(newAction);
-        freshRoom.game_state = {
-          ...freshRoom.game_state,
-          currentTurnActions: freshActions,
-        };
+        freshRoom.game_state = { ...freshRoom.game_state, currentTurnActions: freshActions };
         await freshRoom.save();
 
         this.io.to(roomCode).emit("player_action_update", {
@@ -409,23 +404,38 @@ class GameHandler {
           totalActions: freshActions.length,
         });
 
-        const playersCheck = await Player.findAll({
-          where: { room_id: room.id },
-        });
-        const alivePlayers = playersCheck.filter((p) => p.is_alive);
+        const players = await Player.findAll({ where: { room_id: room.id } });
+        const alivePlayers = players.filter((p) => p.is_alive);
 
         if (freshActions.length >= alivePlayers.length) {
           await this.resolveBattleRound(roomCode);
+        } else {
+          this.io.to(roomCode).emit("waiting_for_players", {
+            actedCount: freshActions.length,
+            totalCount: alivePlayers.length,
+            waitingOn: alivePlayers
+              .filter((p) => !freshActions.find((a) => a.playerId === p.id))
+              .map((p) => ({
+                id: p.id,
+                username: p.username,
+              })),
+          });
         }
         return;
       }
 
-      // Find the skill in character data
-      const skill = player.character_data?.skills?.find((s) => s.name === (skillName || "Basic Attack"));
-      if (!skill) {
-        return this.socket.emit("error", { message: "Skill not found" });
+      // Validate skill was provided
+      if (!skill || !skill.name) {
+        return this.socket.emit("error", { message: "No skill provided" });
       }
-      const staminaCost = skill.staminaCost;
+
+      // Verify skill exists in player's character data
+      const serverSkill = player.character_data?.skills?.find((s) => s.name === skill.name);
+      if (!serverSkill) {
+        return this.socket.emit("error", { message: `Skill "${skill.name}" not found in your character data` });
+      }
+
+      const staminaCost = serverSkill.staminaCost || 0;
 
       // Check if player has enough stamina
       if (player.current_stamina < staminaCost) {
@@ -438,25 +448,26 @@ class GameHandler {
       player.current_stamina = Math.max(0, player.current_stamina - staminaCost);
       await player.save();
 
-      // Add action
-      // Calculate Skill Power from character data
-      const skillPower = player.character_data.skillPower || 1.0;
+      // Get skill power from character data
+      const skillPower = player.character_data.skillPower || 2.0;
+      const skillAmount = serverSkill.amount || 10;
 
       const newAction = {
         playerId,
         playerName: player.username,
-        type: actionType, // 'attack', 'heal', 'defend'
-        skillName: skillName || "Basic Attack",
-        skillAmount: skillAmount || 10,
+        type: actionType,
+        skillName: skill.name,
+        skillType: serverSkill.type,
+        skillAmount: skillAmount,
         skillPower: skillPower,
         staminaCost: staminaCost,
       };
 
-      console.log(`[ACTION] ${player.username} action:`, {
+      console.log(`[ACTION] ${player.username} uses ${newAction.skillName}:`, {
         type: actionType,
-        skillName: newAction.skillName,
-        skillAmount: newAction.skillAmount,
-        skillPower: newAction.skillPower,
+        skillAmount: skillAmount,
+        skillPower: skillPower,
+        staminaCost: staminaCost,
       });
 
       // Re-fetch room to get latest game_state (prevent race condition)
@@ -466,9 +477,7 @@ class GameHandler {
       // Check again if player already acted (double-check after potential concurrent request)
       const alreadyActedCheck = freshActions.find((a) => a.playerId === playerId);
       if (alreadyActedCheck) {
-        return this.socket.emit("error", {
-          message: "You have already acted this turn",
-        });
+        return this.socket.emit("error", { message: "You have already acted this turn" });
       }
 
       freshActions.push(newAction);
@@ -479,7 +488,7 @@ class GameHandler {
         currentTurnActions: freshActions,
       };
       freshRoom.game_state = newGameState;
-      await freshRoom.save(); // Save to persist the action queue
+      await freshRoom.save();
 
       // Broadcast action to room (so others see it)
       this.io.to(roomCode).emit("player_action_update", {
@@ -493,20 +502,17 @@ class GameHandler {
       const alivePlayers = players.filter((p) => p.is_alive);
 
       if (freshActions.length >= alivePlayers.length) {
-        // Resolve Turn
         await this.resolveBattleRound(roomCode);
       } else {
-        // Emit waiting state - show who has acted and who hasn't
-        const playersWhoActed = freshActions.map((a) => a.playerId);
-        const playersStillWaiting = alivePlayers.filter((p) => !playersWhoActed.includes(p.id));
-
         this.io.to(roomCode).emit("waiting_for_players", {
           actedCount: freshActions.length,
           totalCount: alivePlayers.length,
-          waitingFor: playersStillWaiting.map((p) => ({
-            id: p.id,
-            username: p.username,
-          })),
+          waitingOn: alivePlayers
+            .filter((p) => !freshActions.find((a) => a.playerId === p.id))
+            .map((p) => ({
+              id: p.id,
+              username: p.username,
+            })),
         });
       }
     } catch (error) {
