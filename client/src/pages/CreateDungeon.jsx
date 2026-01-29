@@ -29,7 +29,7 @@ export default function CreateDungeon() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:3000/api/rooms", {
+      const res = await fetch("https://api.jobberint.space/api/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
