@@ -11,12 +11,8 @@ const PlayerCard = ({ player, isMe, isHost }) => {
   const hpPercentage = Math.min(100, Math.max(0, (currentHP / maxHP) * 100));
 
   const maxStamina = parseInt(player.character_data?.maxStamina) || 100;
-  const currentStamina =
-    player.current_stamina !== undefined ? player.current_stamina : 100;
-  const staminaPercentage = Math.min(
-    100,
-    Math.max(0, (currentStamina / maxStamina) * 100),
-  );
+  const currentStamina = player.current_stamina !== undefined ? player.current_stamina : 100;
+  const staminaPercentage = Math.min(100, Math.max(0, (currentStamina / maxStamina) * 100));
 
   return (
     <div
@@ -29,15 +25,8 @@ const PlayerCard = ({ player, isMe, isHost }) => {
       {/* Header: Name & Role */}
       <div className="flex justify-between items-start mb-3">
         <div>
-          <h3
-            className={`font-bold text-lg ${isMe ? "text-amber-400" : "text-slate-200"}`}
-          >
-            {player.username}{" "}
-            {isMe && (
-              <span className="text-xs text-slate-500 ml-1">
-                ({t("common.you")})
-              </span>
-            )}
+          <h3 className={`font-bold text-lg ${isMe ? "text-amber-400" : "text-slate-200"}`}>
+            {player.username} {isMe && <span className="text-xs text-slate-500 ml-1">({t("common.you")})</span>}
           </h3>
           <span className="text-xs uppercase tracking-widest text-slate-500 font-semibold bg-slate-950/50 px-2 py-0.5 rounded border border-slate-800">
             {player.character_data?.role || t("game.adventurer")}
@@ -95,9 +84,7 @@ const PlayerCard = ({ player, isMe, isHost }) => {
               }}
             />
           </div>
-          <span className="w-8 text-right text-slate-400">
-            {currentStamina}
-          </span>
+          <span className="w-8 text-right text-slate-400">{currentStamina}</span>
         </div>
       </div>
     </div>
@@ -110,15 +97,25 @@ export default function PlayerList({ players = [], currentPlayerId, hostId }) {
   // Ensure players is always an array to prevent crashes
   const safePlayers = Array.isArray(players) ? players : [];
 
+  console.log(
+    "[PLAYER_LIST] Rendering with players:",
+    safePlayers.map((p) => ({
+      id: p.id,
+      username: p.username,
+      hasCharacter: !!(p.character_data && Object.keys(p.character_data).length > 0),
+      role: p.character_data?.role,
+      maxHP: p.character_data?.maxHP,
+      currentHP: p.current_hp,
+    })),
+  );
+
   const me = safePlayers.find((p) => p.id === currentPlayerId);
   const others = safePlayers.filter((p) => p.id !== currentPlayerId);
 
   return (
     <div className="flex flex-col h-full bg-slate-950 border-r border-slate-900">
       <div className="p-4 border-b border-slate-900">
-        <h2 className="text-xs uppercase tracking-[0.2em] text-slate-500 font-bold mb-4">
-          {t("game.partyRoster")}
-        </h2>
+        <h2 className="text-xs uppercase tracking-[0.2em] text-slate-500 font-bold mb-4">{t("game.partyRoster")}</h2>
         {me && <PlayerCard player={me} isMe={true} isHost={me.id === hostId} />}
       </div>
 
@@ -129,18 +126,11 @@ export default function PlayerList({ players = [], currentPlayerId, hostId }) {
               {t("game.allies")}
             </div>
             {others.map((p) => (
-              <PlayerCard
-                key={p.id}
-                player={p}
-                isMe={false}
-                isHost={p.id === hostId}
-              />
+              <PlayerCard key={p.id} player={p} isMe={false} isHost={p.id === hostId} />
             ))}
           </>
         ) : (
-          <div className="text-center py-10 text-slate-600 italic text-sm">
-            {t("game.noAllies")}
-          </div>
+          <div className="text-center py-10 text-slate-600 italic text-sm">{t("game.noAllies")}</div>
         )}
       </div>
     </div>
