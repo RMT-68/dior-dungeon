@@ -885,7 +885,8 @@ class GameHandler {
           narrative: "A new round begins. Prepare your actions!",
         });
         // Start action timers for the new round
-        console.log(`[ROUND_START] Starting action timers for round ${nextRound}`);\n        this.startActionTimers(roomCode, 30000);
+        console.log(`[ROUND_START] Starting action timers for round ${nextRound}`);
+        this.startActionTimers(roomCode, 30000);
       }
 
       if (battleStatus === "victory") {
