@@ -77,7 +77,11 @@ export default function WaitingRoom() {
       setCharacterStatus(statusMap);
     };
 
-    const handleGameStart = () => navigate("/game");
+    const handleGameStart = () => {
+      console.log("[WR_GAME_START] Navigating to game, current players:", players.length);
+      localStorage.setItem("gameJustStarted", "true");
+      navigate("/game");
+    };
 
     const handleError = (err) => {
       showError(err.message || "Something went wrong");
@@ -114,9 +118,15 @@ export default function WaitingRoom() {
   useEffect(() => {
     return () => {
       // When leaving the waiting room, notify server to remove player
-      if (hasJoinedRef.current) {
+      // BUT NOT if we're transitioning to the game (game just started)
+      const gameJustStarted = localStorage.getItem("gameJustStarted") === "true";
+
+      if (hasJoinedRef.current && !gameJustStarted) {
+        console.log("[WR_CLEANUP] Leaving room, emitting leave_room");
         socket.emit("leave_room");
         hasJoinedRef.current = false;
+      } else if (gameJustStarted) {
+        console.log("[WR_CLEANUP] Game started, NOT emitting leave_room (transitioning to game)");
       }
     };
   }, []);

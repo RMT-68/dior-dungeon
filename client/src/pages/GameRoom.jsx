@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import PlayerList from "../components/PlayerList";
 import ChatBox from "../components/Chatbox";
 import CommandInput from "../components/CommandInput";
@@ -28,9 +28,7 @@ export default function GameRoom() {
   const PLAYER_ID = localStorage.getItem("playerId") || null;
 
   // ============ STATE ============
-  const [messages, setMessages] = useState([
-    { id: 1, type: "system", text: "Waiting for dungeon master..." },
-  ]);
+  const [messages, setMessages] = useState([{ id: 1, type: "system", text: "Waiting for dungeon master..." }]);
 
   // Game state
   const [dungeon, setDungeon] = useState(null);
@@ -44,12 +42,10 @@ export default function GameRoom() {
   const [players, setPlayers] = useState([]);
   const [myPlayerId, setMyPlayerId] = useState(PLAYER_ID);
   const [isHost, setIsHost] = useState(false);
-  const [hostId, setHostId] = useState(null);
 
   // NPC state
   const [npcEvent, setNpcEvent] = useState(null);
   const [npcChoosingPlayerId, setNpcChoosingPlayerId] = useState(null);
-  const [npcChoosingPlayerName, setNpcChoosingPlayerName] = useState(null);
   const [npcResolved, setNpcResolved] = useState(false);
 
   // Battle state
@@ -75,8 +71,21 @@ export default function GameRoom() {
    * Update character state from player data.
    * Single source of truth for character updates.
    */
-  const updateCharacterFromPlayer = (playerData) => {
-    if (!playerData) return;
+  const updateCharacterFromPlayer = useCallback((playerData) => {
+    if (!playerData) {
+      console.log("[UPDATE_CHARACTER] No player data provided");
+      return;
+    }
+
+    console.log("[UPDATE_CHARACTER] Updating character with data:", {
+      username: playerData.username,
+      hp: playerData.current_hp,
+      maxHP: playerData.character_data?.maxHP,
+      stamina: playerData.current_stamina,
+      maxStamina: playerData.character_data?.maxStamina,
+      skills: playerData.character_data?.skills?.map((s) => s.name),
+    });
+
     setCharacter({
       name: playerData.username,
       hp: playerData.current_hp,
@@ -86,7 +95,7 @@ export default function GameRoom() {
       isAlive: playerData.is_alive,
       skills: playerData.character_data?.skills || [],
     });
-  };
+  }, []);
 
   /**
    * Add message to chat.
@@ -115,16 +124,28 @@ export default function GameRoom() {
     // ===== JOIN & SETUP EVENTS =====
     const handleJoinSuccess = (data) => {
       setMyPlayerId(data.playerId);
+      console.log("[JOIN_SUCCESS] PlayerId:", data.playerId);
+
       setIsHost(data.isHost);
-      setHostId(data.hostId);
       localStorage.setItem("playerId", data.playerId);
-      addMessage(
-        "system",
-        `Welcome ${data.username}! You joined room ${data.roomCode}`,
-      );
+      localStorage.setItem("username", data.username);
+      addMessage("system", `Welcome ${data.username}! You joined room ${data.roomCode}`);
     };
 
     const handleRoomUpdate = (data) => {
+      console.log(
+        "[GR_ROOM_UPDATE] Received players:",
+        data.players?.map((p) => ({
+          id: p.id,
+          username: p.username,
+          hasCharacter: !!(p.character_data && Object.keys(p.character_data).length > 0),
+          characterName: p.character_data?.name,
+          role: p.character_data?.role,
+          hp: p.current_hp,
+          maxHP: p.character_data?.maxHP,
+        })),
+      );
+
       if (data.players) {
         setPlayers(data.players);
         const myPlayer = data.players.find((p) => p.id === myPlayerId);
@@ -136,7 +157,25 @@ export default function GameRoom() {
 
     // ===== GAME START =====
     const handleGameStart = (data) => {
-      // Hydrate from complete authoritative snapshot
+      console.log("[GAME_START] Received game start event:", data);
+
+      // Find my player FIRST before setting any state
+      const currentPlayerId = myPlayerId || PLAYER_ID;
+      console.log("[GAME_START] Looking for player with ID:", currentPlayerId);
+      console.log(
+        "[GAME_START] Available players:",
+        data.players?.map((p) => ({ id: p.id, username: p.username })),
+      );
+
+      const myPlayer = data.players?.find((p) => p.id === currentPlayerId);
+
+      if (!myPlayer) {
+        console.warn("[GAME_START] Could not find my player in players list!");
+      } else {
+        console.log("[GAME_START] Found my player:", myPlayer);
+      }
+
+      // Batch all state updates together
       setGameStatus("playing");
       setDungeon(data.dungeon);
       setCurrentRound(data.gameState?.round || 1);
@@ -146,36 +185,37 @@ export default function GameRoom() {
       setBattleSummary(null);
       setNpcEvent(null);
 
-      // Update my character from players data
-      // Note: myPlayerId should be set by join_room_success which arrives first
-      const myPlayer = data.players?.find((p) => p.id === myPlayerId);
-      if (myPlayer) {
-        console.log(myPlayer);
+      // Set myPlayerId if we found the player
+      if (myPlayer && (!myPlayerId || myPlayerId !== myPlayer.id)) {
+        setMyPlayerId(myPlayer.id);
+      }
 
+      // Update character from player data
+      if (myPlayer) {
         updateCharacterFromPlayer(myPlayer);
       }
 
-      addMessage(
-        "system",
-        `⚔️ Adventure begins in ${data.dungeon?.dungeonName || "the dungeon"}!`,
-      );
+      addMessage("system", `⚔️ Adventure begins in ${data.dungeon?.dungeonName || "the dungeon"}!`);
       if (data.gameState?.currentNode) {
-        addMessage(
-          "narration",
-          `📍 ${data.gameState.currentNode.name}: ${data.gameState.currentNode.description}`,
-        );
+        addMessage("narration", `📍 ${data.gameState.currentNode.name}: ${data.gameState.currentNode.description}`);
       }
       if (data.gameState?.currentEnemy) {
-        addMessage(
-          "enemy",
-          `👹 ${data.gameState.currentEnemy.name} appears!`,
-          ACTION_ICONS.attack,
-        );
+        addMessage("enemy", `👹 ${data.gameState.currentEnemy.name} appears!`, ACTION_ICONS.attack);
       }
     };
 
     // ===== GAME STATE SYNC (Reconnection) =====
     const handleGameStateSync = (data) => {
+      console.log("[GAME_STATE_SYNC] Received game state sync:", {
+        playersCount: data.players?.length,
+        players: data.players?.map((p) => ({
+          id: p.id,
+          username: p.username,
+          hasCharacter: !!(p.character_data && Object.keys(p.character_data).length > 0),
+          role: p.character_data?.role,
+        })),
+      });
+
       // Hydrate from complete authoritative snapshot (same as game_start)
       setDungeon(data.dungeon);
       setCurrentRound(data.gameState?.round || 1);
@@ -195,24 +235,15 @@ export default function GameRoom() {
         setNpcEvent(data.gameState.currentNPCEvent);
         setNpcChoosingPlayerId(data.gameState.npcChoosingPlayerId || null);
         addMessage("system", `🔄 Rejoined during NPC event...`);
-      } else if (
-        data.gameState?.currentEnemy &&
-        data.gameState.currentEnemy.hp > 0
-      ) {
+      } else if (data.gameState?.currentEnemy && data.gameState.currentEnemy.hp > 0) {
         setGameStatus("battle");
-        addMessage(
-          "system",
-          `🔄 Rejoined during battle! Round ${data.gameState.round}`,
-        );
+        addMessage("system", `🔄 Rejoined during battle! Round ${data.gameState.round}`);
       } else {
         setGameStatus("playing");
         addMessage("system", `🔄 Rejoined the game!`);
       }
 
-      addMessage(
-        "system",
-        `📍 Location: ${data.gameState?.currentNode?.name || "Unknown"}`,
-      );
+      addMessage("system", `📍 Location: ${data.gameState?.currentNode?.name || "Unknown"}`);
     };
 
     // ===== BATTLE EVENTS =====
@@ -226,8 +257,7 @@ export default function GameRoom() {
     };
 
     const handlePlayerActionUpdate = (data) => {
-      const icon =
-        data.action.type === "heal" ? ACTION_ICONS.heal : ACTION_ICONS.attack;
+      const icon = data.action.type === "heal" ? ACTION_ICONS.heal : ACTION_ICONS.attack;
       let text = "";
 
       if (data.action.type === "rest") {
@@ -248,19 +278,14 @@ export default function GameRoom() {
       // Individual player actions
       if (data.playerNarratives) {
         data.playerNarratives.forEach((pn) => {
-          const icon =
-            pn.type === "heal" ? ACTION_ICONS.heal : ACTION_ICONS.attack;
+          const icon = pn.type === "heal" ? ACTION_ICONS.heal : ACTION_ICONS.attack;
           addMessage("action", pn.narrative, icon);
         });
       }
 
       // Enemy action
       if (data.enemyAction) {
-        addMessage(
-          "enemy",
-          `👹 ${data.enemyAction.narrative}`,
-          ACTION_ICONS.attack,
-        );
+        addMessage("enemy", `👹 ${data.enemyAction.narrative}`, ACTION_ICONS.attack);
       }
 
       // Update enemy state
@@ -276,17 +301,21 @@ export default function GameRoom() {
           updateCharacterFromPlayer(myPlayer);
         }
       }
+
+      // Handle battle status
+      if (data.battleStatus === "victory") {
+        addMessage("system", "🎉 Victory! Waiting for battle summary...");
+        // Set game status to 'playing' so Continue button shows after battle
+        setGameStatus("playing");
+      } else if (data.battleStatus === "defeat") {
+        addMessage("system", "💀 Defeat... The party has fallen.");
+        setGameStatus("finished");
+      }
     };
 
     const handleBattleSummary = (data) => {
       setBattleSummary(data);
-      setGameStatus("playing"); // Change status to show Continue button
-      setCurrentEnemy(null); // Clear enemy since battle is won
-      addMessage(
-        "victory",
-        `🎉 Victory! ${data.summary}`,
-        ACTION_ICONS.victory,
-      );
+      addMessage("victory", `🎉 Victory! ${data.summary}`, ACTION_ICONS.victory);
       if (data.quote) {
         addMessage("quote", `"${data.quote}"`);
       }
@@ -297,7 +326,6 @@ export default function GameRoom() {
       setGameStatus("npc_event");
       setNpcEvent(data.event);
       setNpcChoosingPlayerId(data.choosingPlayerId);
-      setNpcChoosingPlayerName(data.choosingPlayerName);
       setNpcResolved(false);
 
       addMessage("npc", `🧙 ${data.event.npcName}\n${data.event.description}`);
@@ -311,7 +339,6 @@ export default function GameRoom() {
     const handleNpcResolution = (data) => {
       setNpcEvent(null);
       setNpcChoosingPlayerId(null);
-      setNpcChoosingPlayerName(null);
       setNpcResolved(true);
       setGameStatus("playing");
 
@@ -343,11 +370,7 @@ export default function GameRoom() {
       if (data.nextNode.type === "enemy" && data.currentEnemy) {
         setCurrentEnemy(data.currentEnemy);
         setGameStatus("battle");
-        addMessage(
-          "enemy",
-          `👹 ${data.currentEnemy.name} appears!`,
-          ACTION_ICONS.attack,
-        );
+        addMessage("enemy", `👹 ${data.currentEnemy.name} appears!`, ACTION_ICONS.attack);
       } else if (data.nextNode.type === "npc") {
         setGameStatus("npc_event");
       } else {
@@ -360,8 +383,7 @@ export default function GameRoom() {
       setGameStatus("finished");
       setGameOverData(data);
 
-      const isVictory =
-        data.legendStatus === "legendary" || data.legendStatus === "heroic";
+      const isVictory = data.legendStatus === "legendary" || data.legendStatus === "heroic";
       const icon = isVictory ? ACTION_ICONS.victory : ACTION_ICONS.gameover;
 
       addMessage("gameover", `🏆 ${data.summary}`, icon);
@@ -398,10 +420,7 @@ export default function GameRoom() {
       if (hasJoinedRef.current) {
         const storedPlayerId = localStorage.getItem("playerId");
         if (storedPlayerId) {
-          socket.emit("join_room", {
-            roomCode: ROOM_ID,
-            playerId: storedPlayerId,
-          });
+          socket.emit("join_room", { roomCode: ROOM_ID, playerId: storedPlayerId });
         } else {
           socket.emit("join_room", { roomCode: ROOM_ID, username: USERNAME });
         }
@@ -436,14 +455,38 @@ export default function GameRoom() {
     socket.on("player_reconnected", handlePlayerReconnected);
 
     // NOW emit join_room after all listeners are registered
+    // Only join if not already in room or truly reconnecting
     if (!hasJoinedRef.current) {
       hasJoinedRef.current = true;
-      if (PLAYER_ID) {
+
+      // Check if user just transitioned from waiting room (game just started)
+      const gameJustStarted = localStorage.getItem("gameJustStarted") === "true";
+
+      if (gameJustStarted) {
+        // Coming from waiting room - already in socket room
+        console.log("[GAME_START_TRANSITION] Transitioning from waiting room, already connected");
+        console.log("[GAME_START_TRANSITION] Requesting game state sync for player:", PLAYER_ID);
+        localStorage.removeItem("gameJustStarted"); // Clear flag
+        setMyPlayerId(PLAYER_ID);
+
+        // Request current game state since we might have missed the initial game_start event
+        // The socket is already in the room from WaitingRoom, so just emit join_room to get synced
         socket.emit("join_room", {
           roomCode: ROOM_ID,
           playerId: PLAYER_ID,
+          username: USERNAME,
+        });
+      } else if (PLAYER_ID) {
+        // True reconnection - rejoin with playerId
+        console.log("[RECONNECT] Rejoining room with playerId:", PLAYER_ID);
+        socket.emit("join_room", {
+          roomCode: ROOM_ID,
+          playerId: PLAYER_ID,
+          username: USERNAME,
         });
       } else {
+        // New join without playerId (shouldn't happen in normal flow)
+        console.log("[NEW_JOIN] Joining room as new player:", USERNAME);
         socket.emit("join_room", {
           roomCode: ROOM_ID,
           username: USERNAME,
@@ -474,6 +517,25 @@ export default function GameRoom() {
     };
   }, [myPlayerId]);
 
+  // ============ SYNC CHARACTER FROM PLAYERS ============
+  // Update character whenever players array changes and we can find our player
+  useEffect(() => {
+    console.log("[SYNC_CHARACTER] Effect triggered - players:", players.length, "myPlayerId:", myPlayerId);
+
+    if (players.length > 0 && myPlayerId) {
+      const myPlayer = players.find((p) => p.id === myPlayerId);
+      if (myPlayer) {
+        console.log("[SYNC_CHARACTER] Found my player, updating character:", myPlayer);
+        updateCharacterFromPlayer(myPlayer);
+      } else {
+        console.log(
+          "[SYNC_CHARACTER] My player not found in players array. Available player IDs:",
+          players.map((p) => p.id),
+        );
+      }
+    }
+  }, [players, myPlayerId, updateCharacterFromPlayer]);
+
   // ============ ACTION HANDLERS ============
 
   /**
@@ -489,13 +551,7 @@ export default function GameRoom() {
     }
 
     // Map skill type to action type
-    // Note: AI may generate "healing" instead of "heal"
-    const typeMap = {
-      damage: "attack",
-      heal: "heal",
-      healing: "heal",
-      defend: "defend",
-    };
+    const typeMap = { damage: "attack", heal: "heal", defend: "defend" };
     const actionType = typeMap[skill.type] || "attack";
 
     // Send complete skill object for proper server-side validation
@@ -550,10 +606,7 @@ export default function GameRoom() {
       const attackSkill = character.skills.find((s) => s.type === "damage");
       if (attackSkill) handleAction(attackSkill);
     } else if (parsed.command === "heal") {
-      // Support both "heal" and "healing" types from AI
-      const healSkill = character.skills.find(
-        (s) => s.type === "heal" || s.type === "healing",
-      );
+      const healSkill = character.skills.find((s) => s.type === "heal");
       if (healSkill) handleAction(healSkill);
     } else if (parsed.command === "rest") {
       handleAction({ type: "rest" });
@@ -573,10 +626,7 @@ export default function GameRoom() {
           className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-75 d-flex align-items-center justify-content-center"
           style={{ zIndex: 9999 }}
         >
-          <div
-            className="card bg-danger p-4 text-center"
-            style={{ maxWidth: 400 }}
-          >
+          <div className="card bg-danger p-4 text-center" style={{ maxWidth: 400 }}>
             <h4 className="mb-3">⚠️ Connection Lost</h4>
             <p className="mb-4">Reconnect to continue playing.</p>
             <button className="btn btn-primary btn-lg" onClick={handleRejoin}>
@@ -589,9 +639,7 @@ export default function GameRoom() {
       {/* Header */}
       <div className="border-bottom border-secondary p-2 bg-dark d-flex justify-content-between align-items-center">
         <div>
-          <h4 className="mb-0 text-warning">
-            ⚔️ {dungeon?.dungeonName || "Dior Dungeon"}
-          </h4>
+          <h4 className="mb-0 text-warning">⚔️ {dungeon?.dungeonName || "Dior Dungeon"}</h4>
           <small className="text-muted">
             Round: {currentRound} | Status: {gameStatus.toUpperCase()}
             {currentNode && ` | Location: ${currentNode.name}`}
@@ -607,11 +655,7 @@ export default function GameRoom() {
       <div className="flex-grow-1 d-flex overflow-hidden">
         {/* Left: Player List */}
         <div className="col-3 border-end border-secondary bg-dark p-0 overflow-auto">
-          <PlayerList
-            players={players}
-            currentPlayerId={myPlayerId}
-            hostId={hostId}
-          />
+          <PlayerList players={players} currentPlayerId={myPlayerId} />
         </div>
 
         {/* Center: Chat & Actions */}
@@ -622,31 +666,24 @@ export default function GameRoom() {
           {gameStatus === "battle" && character.isAlive && (
             <div className="p-2 bg-secondary border-top border-dark">
               <div className="d-flex gap-2 flex-wrap justify-content-center">
-                {character.skills.map((skill, idx) => {
-                  // Check for both "heal" and "healing" types (AI may generate either)
-                  const isHealSkill =
-                    skill.type === "heal" || skill.type === "healing";
-                  return (
-                    <button
-                      key={idx}
-                      className={`btn btn-sm d-flex align-items-center gap-1 ${
-                        isHealSkill ? "btn-success" : "btn-danger"
-                      }`}
-                      onClick={() => handleAction(skill)}
-                      disabled={character.stamina < (skill.staminaCost || 0)}
-                      title={`${skill.staminaCost || 0} stamina`}
-                    >
-                      <img
-                        src={
-                          isHealSkill ? ACTION_ICONS.heal : ACTION_ICONS.attack
-                        }
-                        alt={skill.type}
-                        style={{ width: 16, height: 16 }}
-                      />
-                      {skill.name}
-                    </button>
-                  );
-                })}
+                {character.skills.map((skill, idx) => (
+                  <button
+                    key={idx}
+                    className={`btn btn-sm d-flex align-items-center gap-1 ${
+                      skill.type === "heal" ? "btn-success" : "btn-danger"
+                    }`}
+                    onClick={() => handleAction(skill)}
+                    disabled={character.stamina < (skill.staminaCost || 0)}
+                    title={`${skill.staminaCost || 0} stamina`}
+                  >
+                    <img
+                      src={skill.type === "heal" ? ACTION_ICONS.heal : ACTION_ICONS.attack}
+                      alt={skill.type}
+                      style={{ width: 16, height: 16 }}
+                    />
+                    {skill.name}
+                  </button>
+                ))}
                 <button
                   className="btn btn-warning btn-sm"
                   onClick={() => handleAction({ type: "rest" })}
@@ -661,11 +698,7 @@ export default function GameRoom() {
           {/* NPC Choice Buttons */}
           {gameStatus === "npc_event" && npcEvent && (
             <div className="p-2 bg-info border-top border-dark">
-              <p className="mb-2 text-dark fw-bold">
-                {npcCanChoose
-                  ? "🎯 Your turn to choose:"
-                  : `⏳ Waiting for ${npcChoosingPlayerName || "host"} to decide...`}
-              </p>
+              <p className="mb-2 text-dark fw-bold">{npcCanChoose ? "Choose wisely:" : "Waiting for decision..."}</p>
               <div className="d-flex gap-2 flex-wrap">
                 {npcEvent.choices?.map((choice, idx) => (
                   <button
@@ -688,9 +721,7 @@ export default function GameRoom() {
                 className="btn btn-light"
                 onClick={handleNextNode}
                 disabled={!isHost}
-                title={
-                  !isHost ? "Only host can proceed" : "Continue to next area"
-                }
+                title={!isHost ? "Only host can proceed" : "Continue to next area"}
               >
                 ➡️ Continue
               </button>
@@ -704,9 +735,7 @@ export default function GameRoom() {
                 className="btn btn-dark"
                 onClick={handleNextNode}
                 disabled={!isHost}
-                title={
-                  !isHost ? "Only host can proceed" : "Continue to next area"
-                }
+                title={!isHost ? "Only host can proceed" : "Continue to next area"}
               >
                 ➡️ Continue
               </button>
@@ -714,10 +743,7 @@ export default function GameRoom() {
           )}
 
           {/* Command Input */}
-          <CommandInput
-            onSend={handleSendMessage}
-            disabled={!character.isAlive || gameStatus === "finished"}
-          />
+          <CommandInput onSend={handleSendMessage} disabled={!character.isAlive || gameStatus === "finished"} />
         </div>
 
         {/* Right: Character & Enemy Info */}
@@ -762,11 +788,7 @@ export default function GameRoom() {
                   {character.skills.map((s, i) => (
                     <li key={i}>
                       <img
-                        src={
-                          s.type === "heal" || s.type === "healing"
-                            ? ACTION_ICONS.heal
-                            : ACTION_ICONS.attack
-                        }
+                        src={s.type === "heal" ? ACTION_ICONS.heal : ACTION_ICONS.attack}
                         alt={s.type}
                         style={{ width: 12, height: 12, marginRight: 4 }}
                       />
@@ -799,9 +821,7 @@ export default function GameRoom() {
                     {currentEnemy.hp}/{currentEnemy.maxHP || "???"}
                   </small>
                 </div>
-                <small className="text-muted">
-                  {currentEnemy.role || currentEnemy.archetype}
-                </small>
+                <small className="text-muted">{currentEnemy.role || currentEnemy.archetype}</small>
               </div>
             </div>
           )}
@@ -812,8 +832,7 @@ export default function GameRoom() {
               <div className="card-body text-center">
                 <img
                   src={
-                    gameOverData.legendStatus === "legendary" ||
-                    gameOverData.legendStatus === "heroic"
+                    gameOverData.legendStatus === "legendary" || gameOverData.legendStatus === "heroic"
                       ? ACTION_ICONS.victory
                       : ACTION_ICONS.gameover
                   }
@@ -821,9 +840,7 @@ export default function GameRoom() {
                   className="img-fluid mb-2"
                   style={{ maxHeight: 80 }}
                 />
-                <h5 className="text-warning">
-                  {gameOverData.legendStatus?.toUpperCase()}
-                </h5>
+                <h5 className="text-warning">{gameOverData.legendStatus?.toUpperCase()}</h5>
                 <p className="small">{gameOverData.epitaph}</p>
               </div>
             </div>
