@@ -389,12 +389,23 @@ class GameHandler {
         const freshRoom = await Room.findOne({ where: { room_code: roomCode } });
         const freshActions = freshRoom.game_state.currentTurnActions || [];
 
+        console.log(`[REST_ACTION] Before push:`, {
+          count: freshActions.length,
+          actions: freshActions.map((a) => ({ player: a.playerName, type: a.type })),
+        });
+
         const alreadyActedCheck = freshActions.find((a) => a.playerId === playerId);
         if (alreadyActedCheck) {
           return this.socket.emit("error", { message: "You have already acted this turn" });
         }
 
         freshActions.push(newAction);
+
+        console.log(`[REST_ACTION] After push:`, {
+          count: freshActions.length,
+          actions: freshActions.map((a) => ({ player: a.playerName, type: a.type })),
+        });
+
         freshRoom.game_state = { ...freshRoom.game_state, currentTurnActions: freshActions };
         await freshRoom.save();
 
@@ -407,7 +418,14 @@ class GameHandler {
         const players = await Player.findAll({ where: { room_id: room.id } });
         const alivePlayers = players.filter((p) => p.is_alive);
 
+        console.log(`[REST_ACTION] Checking all acted:`, {
+          actedCount: freshActions.length,
+          aliveCount: alivePlayers.length,
+          shouldResolve: freshActions.length >= alivePlayers.length,
+        });
+
         if (freshActions.length >= alivePlayers.length) {
+          console.log(`[REST_ACTION] Calling resolveBattleRound`);
           await this.resolveBattleRound(roomCode);
         } else {
           this.io.to(roomCode).emit("waiting_for_players", {
@@ -474,6 +492,11 @@ class GameHandler {
       const freshRoom = await Room.findOne({ where: { room_code: roomCode } });
       const freshActions = freshRoom.game_state.currentTurnActions || [];
 
+      console.log(`[SKILL_ACTION] Before push:`, {
+        count: freshActions.length,
+        actions: freshActions.map((a) => ({ player: a.playerName, type: a.type })),
+      });
+
       // Check again if player already acted (double-check after potential concurrent request)
       const alreadyActedCheck = freshActions.find((a) => a.playerId === playerId);
       if (alreadyActedCheck) {
@@ -481,6 +504,11 @@ class GameHandler {
       }
 
       freshActions.push(newAction);
+
+      console.log(`[SKILL_ACTION] After push:`, {
+        count: freshActions.length,
+        actions: freshActions.map((a) => ({ player: a.playerName, type: a.type })),
+      });
 
       // Update room state with fresh data
       const newGameState = {
@@ -501,7 +529,14 @@ class GameHandler {
       const players = await Player.findAll({ where: { room_id: room.id } });
       const alivePlayers = players.filter((p) => p.is_alive);
 
+      console.log(`[SKILL_ACTION] Checking all acted:`, {
+        actedCount: freshActions.length,
+        aliveCount: alivePlayers.length,
+        shouldResolve: freshActions.length >= alivePlayers.length,
+      });
+
       if (freshActions.length >= alivePlayers.length) {
+        console.log(`[SKILL_ACTION] Calling resolveBattleRound`);
         await this.resolveBattleRound(roomCode);
       } else {
         this.io.to(roomCode).emit("waiting_for_players", {
@@ -528,6 +563,14 @@ class GameHandler {
         return;
       }
 
+      console.log(`[RESOLVE_START] Room fetched for ${roomCode}`);
+      console.log(`[RESOLVE_START] game_state exists:`, !!room.game_state);
+      console.log(`[RESOLVE_START] currentTurnActions:`, {
+        exists: !!room.game_state.currentTurnActions,
+        length: room.game_state.currentTurnActions?.length,
+        content: room.game_state.currentTurnActions?.map((a) => ({ player: a.playerName, type: a.type })),
+      });
+
       const players = await Player.findAll({ where: { room_id: room.id } });
       if (!players || players.length === 0) {
         console.error(`No players found for room ${roomCode}`);
@@ -536,6 +579,11 @@ class GameHandler {
       const gameState = room.game_state;
       const currentEnemy = gameState.currentEnemy;
       const playerActions = gameState.currentTurnActions;
+
+      console.log(`[RESOLVE_START] playerActions array:`, {
+        length: playerActions?.length,
+        content: playerActions?.map((a) => ({ player: a.playerName, type: a.type })),
+      });
 
       // Validate enemy exists for battle
       if (!currentEnemy) {
