@@ -1493,7 +1493,7 @@ class GameHandler {
         // Notify clients that action timers have started
         this.io.to(roomCode).emit("timer_started", {
           timeoutMs: timeoutMs,
-          timeoutSeconds: Math.floor(timeoutMs / 1000),
+          timeoutSeconds: Math.floor(timeoutMs / 30000),
           players: players.map((p) => ({ id: p.id, username: p.username })),
         });
       });

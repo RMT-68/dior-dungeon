@@ -149,8 +149,8 @@ function validateCharacterStructure(character) {
     );
   }
 
-  if (character.hp < 50 || character.hp > 200) {
-    throw new Error("HP must be between 50 and 200");
+  if (character.hp < 50 || character.hp > 1000) {
+    throw new Error("HP must be between 50 and 1000");
   }
 
   if (character.stamina < 1 || character.stamina > 20) {
