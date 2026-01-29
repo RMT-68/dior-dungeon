@@ -263,7 +263,7 @@ class GameHandler {
         });
       }
 
-      // Update room status
+      // Update room status to "playing" FIRST to prevent players from being deleted during transition
       room.status = "playing";
       room.current_node_index = 0;
 
@@ -283,13 +283,17 @@ class GameHandler {
         currentNPCEvent: null,
         npcChoosingPlayerId: null,
       };
-      await room.save();
 
-      // Notify game start with COMPLETE authoritative snapshot to all players
-      // This matches the structure of game_state_sync to ensure consistency
+      // Save room status immediately to prevent race conditions
+      await room.save();
+      console.log(`[START_GAME] Room ${roomCode} status changed to 'playing'`);
+
+      // Now fetch players - they should not be deleted during navigation
       const updatedPlayers = await Player.findAll({
         where: { room_id: room.id },
       });
+
+      console.log(`[START_GAME] Broadcasting game_start to ${updatedPlayers.length} players`);
 
       this.io.to(roomCode).emit("game_start", {
         dungeon: room.dungeon_data,
@@ -1188,11 +1192,11 @@ class GameHandler {
       const room = await Room.findOne({ where: { room_code: roomCode } });
       if (!room) return;
 
+      console.log(`[LEAVE_ROOM] Player ${username} (${playerId}) attempting to leave. Room status: ${room.status}`);
+
       // Don't remove players if game is in progress or already finished
       if (room.status === "playing" || room.status === "finished") {
-        console.log(
-          `[LEAVE_ROOM] Player ${username} tried to leave during ${room.status} - keeping in DB for reconnection`,
-        );
+        console.log(`[LEAVE_ROOM] Blocked - game is ${room.status}. Player kept in DB for reconnection`);
         // Just remove from socket room, don't delete from DB
         this.socket.leave(roomCode);
         return;
@@ -1200,7 +1204,7 @@ class GameHandler {
 
       // Remove player from room (only during waiting status)
       await Player.destroy({ where: { id: playerId } });
-      console.log(`Player ${username} (ID: ${playerId}) left room ${roomCode}`);
+      console.log(`[LEAVE_ROOM] Player ${username} removed from DB (room was in waiting status)`);
 
       // Notify remaining players
       const remainingPlayers = await Player.findAll({ where: { room_id: room.id } });
@@ -1258,11 +1262,14 @@ class GameHandler {
 
         // If room is in waiting status and player disconnects, remove them from DB
         if (room.status === "waiting") {
+          console.log(`[DISCONNECT] Room in waiting status - removing player ${username} from DB`);
           await Player.destroy({ where: { id: playerId } });
 
           // Update player list for remaining players
           const players = await Player.findAll({ where: { room_id: room.id } });
           this.io.to(roomCode).emit("room_update", { room, players });
+        } else {
+          console.log(`[DISCONNECT] Room status is ${room.status} - keeping player ${username} in DB for reconnection`);
         }
       }
     } catch (error) {
