@@ -53,6 +53,17 @@ export default function WaitingRoom() {
 
     // Define handler functions
     const handleRoomUpdate = ({ room, players }) => {
+      console.log(
+        "[WR_ROOM_UPDATE] Received players:",
+        players.map((p) => ({
+          id: p.id,
+          username: p.username,
+          hasCharacter: !!(p.character_data && Object.keys(p.character_data).length > 0),
+          characterName: p.character_data?.name,
+          role: p.character_data?.role,
+        })),
+      );
+
       setRoom(room);
       setPlayers(players);
 
@@ -61,14 +72,16 @@ export default function WaitingRoom() {
 
       const statusMap = {};
       players.forEach((p) => {
-        statusMap[p.id] = !!(
-          p.character_data && Object.keys(p.character_data).length > 0
-        );
+        statusMap[p.id] = !!(p.character_data && Object.keys(p.character_data).length > 0);
       });
       setCharacterStatus(statusMap);
     };
 
-    const handleGameStart = () => navigate("/game");
+    const handleGameStart = () => {
+      console.log("[WR_GAME_START] Navigating to game, current players:", players.length);
+      localStorage.setItem("gameJustStarted", "true");
+      navigate("/game");
+    };
 
     const handleError = (err) => {
       showError(err.message || "Something went wrong");
@@ -105,9 +118,15 @@ export default function WaitingRoom() {
   useEffect(() => {
     return () => {
       // When leaving the waiting room, notify server to remove player
-      if (hasJoinedRef.current) {
+      // BUT NOT if we're transitioning to the game (game just started)
+      const gameJustStarted = localStorage.getItem("gameJustStarted") === "true";
+
+      if (hasJoinedRef.current && !gameJustStarted) {
+        console.log("[WR_CLEANUP] Leaving room, emitting leave_room");
         socket.emit("leave_room");
         hasJoinedRef.current = false;
+      } else if (gameJustStarted) {
+        console.log("[WR_CLEANUP] Game started, NOT emitting leave_room (transitioning to game)");
       }
     };
   }, []);
@@ -124,14 +143,11 @@ export default function WaitingRoom() {
       const isFirst = regenCount === 0;
       const endpoint = isFirst ? "generate" : "regenerate";
 
-      const res = await fetch(
-        `https://api.jobberint.space/api/characters/${myPlayer.id}/${endpoint}`,
-        {
-          method: isFirst ? "POST" : "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roomCode }),
-        },
-      );
+      const res = await fetch(`https://api.jobberint.space/api/characters/${myPlayer.id}/${endpoint}`, {
+        method: isFirst ? "POST" : "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomCode }),
+      });
 
       const json = await res.json();
       if (!json?.success) {
@@ -141,11 +157,7 @@ export default function WaitingRoom() {
 
       const charData = json.data.player.character_data;
 
-      setPlayers((prev) =>
-        prev.map((p) =>
-          p.id === myPlayer.id ? { ...p, character_data: charData } : p,
-        ),
-      );
+      setPlayers((prev) => prev.map((p) => (p.id === myPlayer.id ? { ...p, character_data: charData } : p)));
 
       setCharacterStatus((prev) => ({
         ...prev,
@@ -176,9 +188,7 @@ export default function WaitingRoom() {
     navigate("/");
   };
 
-  const allCharactersGenerated =
-    players.length === maxPlayers &&
-    players.every((p) => characterStatus[p.id]);
+  const allCharactersGenerated = players.length === maxPlayers && players.every((p) => characterStatus[p.id]);
 
   const slots = Array.from({ length: maxPlayers });
 
@@ -193,10 +203,7 @@ export default function WaitingRoom() {
   /* ================= RENDER ================= */
   return (
     <div className="dungeon-bg">
-      <div
-        className="d-flex justify-content-end p-3 gap-2"
-        style={{ position: "absolute", top: 0, right: 0 }}
-      >
+      <div className="d-flex justify-content-end p-3 gap-2" style={{ position: "absolute", top: 0, right: 0 }}>
         <MusicPlayer />
         <LanguageToggle />
       </div>
@@ -206,9 +213,7 @@ export default function WaitingRoom() {
         <div className="waiting-dungeon-info">
           <h3>{room.dungeon_data.dungeonName}</h3>
           <p>{room.dungeon_data.description}</p>
-          <span className="badge">
-            Difficulty: {room.dungeon_data.difficulty?.toUpperCase()}
-          </span>
+          <span className="badge">Difficulty: {room.dungeon_data.difficulty?.toUpperCase()}</span>
         </div>
       )}
 
@@ -241,10 +246,7 @@ export default function WaitingRoom() {
             const hasChar = player && characterStatus[player.id];
 
             return (
-              <div
-                key={index}
-                className={`player-card ${player?.is_ready ? "ready" : ""} ${!player ? "empty" : ""}`}
-              >
+              <div key={index} className={`player-card ${player?.is_ready ? "ready" : ""} ${!player ? "empty" : ""}`}>
                 {player ? (
                   <>
                     <div className="player-name">
@@ -253,12 +255,8 @@ export default function WaitingRoom() {
 
                     {hasChar && player.character_data ? (
                       <div className="character-info">
-                        <div className="character-name">
-                          {player.character_data.name}
-                        </div>
-                        <div className="character-role">
-                          {player.character_data.role}
-                        </div>
+                        <div className="character-name">{player.character_data.name}</div>
+                        <div className="character-role">{player.character_data.role}</div>
 
                         <div className="character-stats">
                           <div>HP: {player.character_data.hp}</div>
@@ -268,16 +266,12 @@ export default function WaitingRoom() {
                         {/* 🔥 FIXED SKILL LAYOUT */}
                         <div className="character-skills">
                           <ul>
-                            {player.character_data.skills
-                              ?.slice(0, 3)
-                              .map((s, i) => (
-                                <li key={i}>
-                                  <span className="skill-name">{s.name}</span>
-                                  <span className={`skill-type ${s.type}`}>
-                                    {s.type === "damage" ? "DMG" : "HEAL"}
-                                  </span>
-                                </li>
-                              ))}
+                            {player.character_data.skills?.slice(0, 3).map((s, i) => (
+                              <li key={i}>
+                                <span className="skill-name">{s.name}</span>
+                                <span className={`skill-type ${s.type}`}>{s.type === "damage" ? "DMG" : "HEAL"}</span>
+                              </li>
+                            ))}
                           </ul>
                         </div>
                       </div>
@@ -292,9 +286,7 @@ export default function WaitingRoom() {
                         onClick={handleGenerateCharacter}
                       >
                         <span>
-                          {regenCount === 0
-                            ? "GENERATE CHARACTER"
-                            : `REGENERATE (${regenCount}/${MAX_REGEN})`}
+                          {regenCount === 0 ? "GENERATE CHARACTER" : `REGENERATE (${regenCount}/${MAX_REGEN})`}
                         </span>
                       </button>
                     )}
@@ -316,11 +308,7 @@ export default function WaitingRoom() {
             <span>{isReady ? "UNREADY" : "READY"}</span>
           </button>
 
-          <button
-            className="btn btn-dungeon-primary"
-            disabled={!allCharactersGenerated}
-            onClick={handleStart}
-          >
+          <button className="btn btn-dungeon-primary" disabled={!allCharactersGenerated} onClick={handleStart}>
             <span>{t("waiting.startDungeon")}</span>
           </button>
         </div>
