@@ -2,7 +2,7 @@ import React from "react";
 import { useLanguage } from "../context/LanguageContext";
 
 // Component defined OUTSIDE the main component to avoid "Cannot create components during render" error
-const PlayerCard = ({ player, isMe }) => {
+const PlayerCard = ({ player, isMe, isHost }) => {
   const { t } = useLanguage();
 
   // Safe calculation for bars
@@ -46,6 +46,11 @@ const PlayerCard = ({ player, isMe }) => {
 
         {/* Status Badges */}
         <div className="flex flex-col items-end gap-1">
+          {isHost && (
+            <span className="text-[10px] bg-yellow-600/50 text-yellow-300 px-2 py-0.5 rounded border border-yellow-500/50 font-bold">
+              👑 HOST
+            </span>
+          )}
           {!player.is_alive && (
             <span className="text-[10px] bg-red-900/50 text-red-400 px-2 py-0.5 rounded border border-red-900">
               {t("game.dead")}
@@ -99,7 +104,7 @@ const PlayerCard = ({ player, isMe }) => {
   );
 };
 
-export default function PlayerList({ players = [], currentPlayerId }) {
+export default function PlayerList({ players = [], currentPlayerId, hostId }) {
   const { t } = useLanguage();
 
   // Ensure players is always an array to prevent crashes
@@ -114,7 +119,7 @@ export default function PlayerList({ players = [], currentPlayerId }) {
         <h2 className="text-xs uppercase tracking-[0.2em] text-slate-500 font-bold mb-4">
           {t("game.partyRoster")}
         </h2>
-        {me && <PlayerCard player={me} isMe={true} />}
+        {me && <PlayerCard player={me} isMe={true} isHost={me.id === hostId} />}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
@@ -124,7 +129,12 @@ export default function PlayerList({ players = [], currentPlayerId }) {
               {t("game.allies")}
             </div>
             {others.map((p) => (
-              <PlayerCard key={p.id} player={p} isMe={false} />
+              <PlayerCard
+                key={p.id}
+                player={p}
+                isMe={false}
+                isHost={p.id === hostId}
+              />
             ))}
           </>
         ) : (
