@@ -280,6 +280,8 @@ export default function GameRoom() {
 
     const handleBattleSummary = (data) => {
       setBattleSummary(data);
+      setGameStatus("playing"); // Change status to show Continue button
+      setCurrentEnemy(null); // Clear enemy since battle is won
       addMessage(
         "victory",
         `🎉 Victory! ${data.summary}`,
