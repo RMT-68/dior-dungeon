@@ -1,54 +1,29 @@
 const { aiHelper } = require("../helpers/aiHelper");
 
 /**
- * Generate battle narration and enemy AI response
+ * Roll a d20 (1-20)
+ */
+function rollD20() {
+  return Math.floor(Math.random() * 20) + 1;
+}
+
+/**
+ * Generate battle narration flavor text
  * @param {Object} params - Battle parameters
  * @param {string} params.theme - Dungeon theme
  * @param {Object} params.enemy - Current enemy state
- * @param {Array} params.playerActions - Array of player actions this round
+ * @param {Array} params.processedActions - Array of processed actions WITH damage already calculated
  * @param {Object} params.battleState - Current battle state
  * @param {string} params.language - Language for narration
  * @returns {Promise<Object>} Battle result with narration and enemy action
  */
-async function generateBattleNarration({
-  theme,
-  enemy,
-  playerActions,
-  battleState,
-  language = "en",
-}) {
+async function generateBattleNarration({ theme, enemy, processedActions, battleState, language = "en" }) {
   // Validate input
-  if (!theme || !enemy || !playerActions || !battleState) {
+  if (!theme || !enemy || !processedActions || !battleState) {
     throw new Error("Missing required battle parameters");
   }
 
-  // Calculate player action results with dice rolls
-  const processedActions = playerActions.map((action) => {
-    // REST actions already have their D6 diceRoll, don't generate a new one
-    const diceRoll = action.type === "rest" ? action.diceRoll : rollD20();
-    let result;
-
-    if (action.type === "attack") {
-      result = calculateDamage(action, diceRoll);
-    } else if (action.type === "heal") {
-      result = calculateHealing(action, diceRoll);
-    } else if (action.type === "defend") {
-      result = { type: "defend", defenseBonus: 0.4, diceRoll };
-    } else if (action.type === "rest") {
-      result = { type: "rest" };
-    }
-
-    return {
-      playerId: action.playerId,
-      playerName: action.playerName,
-      actionType: action.type,
-      skillName: action.skillName,
-      diceRoll: diceRoll,
-      ...result,
-    };
-  });
-
-  // Calculate total damage to enemy
+  // Calculate enemy HP info for the prompt (for context only, actual HP update is in gameHandler)
   const totalDamageToEnemy = processedActions
     .filter((a) => a.actionType === "attack")
     .reduce((sum, a) => sum + (a.finalDamage || 0), 0);
@@ -68,22 +43,33 @@ Player Actions This Round:
 ${processedActions
   .map((a) => {
     if (a.actionType === "rest") {
-      return `- ${a.playerName}: Took a rest and regained stamina (Dice: ${a.diceRoll}, Stamina Regained: ${a.staminaRegained})`;
+      return `- ${a.playerName}: Took a rest and regained stamina (Stamina Regained: ${a.staminaRegained})`;
     }
-    return `- ${a.playerName}: ${a.actionType === "attack" ? `Attacked with ${a.skillName}` : a.actionType === "heal" ? `Healed with ${a.skillName}` : "Defended"} (Dice: ${a.diceRoll}${a.isCritical ? " CRITICAL!" : ""}${a.isMiss ? " MISS!" : ""})`;
+    if (a.actionType === "attack") {
+      const outcome = a.isMiss ? "MISS" : a.isCritical ? "CRITICAL HIT!" : "HIT";
+      const damageText = a.isMiss ? "no damage" : `${a.finalDamage} damage`;
+      return `- ${a.playerName}: Attacked with ${a.skillName} - ${outcome} (${damageText})`;
+    }
+    if (a.actionType === "heal") {
+      return `- ${a.playerName}: Healed with ${a.skillName} - Restored ${a.finalHeal} HP`;
+    }
+    return `- ${a.playerName}: Defended (reduced incoming damage)`;
   })
   .join("\n")}
 
 Results:
-- Total Damage Dealt: ${totalDamageToEnemy}
+- Total Damage Dealt to Enemy: ${totalDamageToEnemy}
 - Enemy Status: ${enemyDefeated ? "DEFEATED" : "Still Fighting"}
 
-IMPORTANT:
-1. Generate engaging narrative in ${language} language
-2. Describe each player action dramatically
-3. Include dice roll outcomes (critical hits, misses)
-4. Describe enemy reactions and condition
-5. ${
+CRITICAL INSTRUCTIONS:
+1. Generate engaging narrative in ${language} language ONLY
+2. Use the hit/miss/critical information provided above - DO NOT reinterpret dice rolls
+3. If marked "MISS", describe the attack failing to connect
+4. If marked "CRITICAL HIT!", describe extra dramatic, powerful impact
+5. If marked "HIT", describe successful damage
+6. Describe actual damage values shown above, not hypothetical ones
+7. Describe enemy reactions and condition realistically
+8. ${
     !enemyDefeated
       ? `Decide enemy's next action strategically based on:
    - Enemy HP: ${((newEnemyHP / enemy.hp) * 100).toFixed(0)}% remaining
@@ -92,6 +78,8 @@ IMPORTANT:
    - Choose wisely: attack if healthy, heal if HP < 40%, use powerful skills if desperate`
       : "Describe the enemy's defeat dramatically"
   }
+
+REMEMBER: Use only the information above. Do not add your own hit/miss interpretations.
 
 Generate ONLY valid JSON:
 {
@@ -127,9 +115,7 @@ Generate ONLY valid JSON:
     // Process enemy action if not defeated
     let enemyActionResult = null;
     if (!enemyDefeated && narration.enemyAction) {
-      const enemySkill = enemy.skills.find(
-        (s) => s.name === narration.enemyAction.skillUsed,
-      );
+      const enemySkill = enemy.skills.find((s) => s.name === narration.enemyAction.skillUsed);
       if (enemySkill) {
         const enemyDiceRoll = rollD20();
 
@@ -139,11 +125,7 @@ Generate ONLY valid JSON:
             skillName: enemySkill.name,
             baseDamage: enemySkill.amount,
             diceRoll: enemyDiceRoll,
-            ...calculateEnemyDamage(
-              enemySkill,
-              enemyDiceRoll,
-              enemy.skillPower,
-            ),
+            ...calculateEnemyDamage(enemySkill, enemyDiceRoll, enemy.skillPower),
             narrative: narration.enemyAction.narrative,
           };
         } else if (enemySkill.type === "healing") {
@@ -195,61 +177,6 @@ Generate ONLY valid JSON:
 /**
  * Roll a 20-sided die
  */
-function rollD20() {
-  return Math.floor(Math.random() * 20) + 1;
-}
-
-/**
- * Calculate damage with dice roll and critical/miss logic
- */
-function calculateDamage(action, diceRoll) {
-  const isCritical = diceRoll >= 18;
-  const isMiss = diceRoll <= 2;
-
-  if (isMiss) {
-    return {
-      type: "attack",
-      baseDamage: action.skillAmount,
-      diceRoll: diceRoll,
-      finalDamage: 0,
-      isCritical: false,
-      isMiss: true,
-    };
-  }
-
-  // Base damage = skill amount × skill power + dice bonus
-  let damage = action.skillAmount * action.skillPower + diceRoll / 10;
-
-  if (isCritical) {
-    damage *= 2;
-  }
-
-  return {
-    type: "attack",
-    baseDamage: action.skillAmount,
-    diceRoll: diceRoll,
-    finalDamage: Math.round(damage * 10) / 10,
-    isCritical: isCritical,
-    isMiss: false,
-  };
-}
-
-/**
- * Calculate healing with dice roll
- */
-function calculateHealing(action, diceRoll) {
-  const baseHeal = action.skillAmount * action.skillPower;
-  const diceBonus = diceRoll / 10;
-  const finalHeal = Math.round((baseHeal + diceBonus) * 10) / 10;
-
-  return {
-    type: "heal",
-    baseHeal: action.skillAmount,
-    diceRoll: diceRoll,
-    finalHeal: finalHeal,
-  };
-}
-
 /**
  * Calculate enemy damage with skillPower multiplier
  */
@@ -367,5 +294,4 @@ function createFallbackBattleResult({
 
 module.exports = {
   generateBattleNarration,
-  rollD20,
 };

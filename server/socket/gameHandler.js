@@ -280,20 +280,33 @@ class GameHandler {
         currentTurnActions: [], // Track actions for current round
         currentNode: firstNode,
         currentEnemy: initialEnemy, // If undefined, that's fine for NPC nodes
+        currentNPCEvent: null,
+        npcChoosingPlayerId: null,
       };
       await room.save();
 
-      // Notify game start with initial data
+      // Notify game start with COMPLETE authoritative snapshot to all players
+      // This matches the structure of game_state_sync to ensure consistency
       const updatedPlayers = await Player.findAll({
         where: { room_id: room.id },
       });
 
       this.io.to(roomCode).emit("game_start", {
-        room,
-        players: updatedPlayers,
         dungeon: room.dungeon_data,
-        currentNode: firstNode,
-        currentEnemy: initialEnemy,
+        gameState: {
+          round: 1,
+          currentNode: firstNode,
+          currentEnemy: initialEnemy,
+          currentTurnActions: [],
+          currentNPCEvent: null,
+          npcChoosingPlayerId: null,
+          adventureLog: [],
+        },
+        players: updatedPlayers,
+        metadata: {
+          totalPlayers: updatedPlayers.length,
+          alivePlayers: updatedPlayers.filter((p) => p.is_alive).length,
+        },
       });
 
       // If it's an NPC node, trigger event immediately? Or wait for client?
@@ -310,7 +323,7 @@ class GameHandler {
   async playerAction(data) {
     try {
       const { playerId, roomCode } = this.socket.data;
-      const { actionType, skillName, skillAmount, skillId } = data;
+      const { actionType, skill } = data;
 
       if (!playerId || !roomCode) {
         return this.socket.emit("error", { message: "Invalid session" });
@@ -354,7 +367,7 @@ class GameHandler {
 
       // Handle REST action
       if (actionType === "rest") {
-        const diceRoll = Math.floor(Math.random() * 6) + 1; // 1d6 for stamina regen
+        const diceRoll = Math.floor(Math.random() * 6) + 1;
         const staminaRegained = diceRoll;
         player.current_stamina = Math.min(player.character_data.maxStamina, player.current_stamina + staminaRegained);
         await player.save();
@@ -363,31 +376,37 @@ class GameHandler {
           playerId,
           playerName: player.username,
           type: "rest",
-          skillName: "Rest",
-          staminaRegained: staminaRegained,
           diceRoll: diceRoll,
-          skillPower: 0,
+          staminaRegained: staminaRegained,
         };
 
-        // Re-fetch room to get latest game_state (prevent race condition)
-        const freshRoom = await Room.findOne({
-          where: { room_code: roomCode },
+        console.log(`[ACTION] ${player.username} rests:`, {
+          diceRoll,
+          staminaRegained,
+          newStamina: player.current_stamina,
         });
+
+        const freshRoom = await Room.findOne({ where: { room_code: roomCode } });
         const freshActions = freshRoom.game_state.currentTurnActions || [];
 
-        // Check again if player already acted (double-check after potential wait)
-        const stillActed = freshActions.find((a) => a.playerId === playerId);
-        if (stillActed) {
-          return this.socket.emit("error", {
-            message: "You have already acted this turn",
-          });
+        console.log(`[REST_ACTION] Before push:`, {
+          count: freshActions.length,
+          actions: freshActions.map((a) => ({ player: a.playerName, type: a.type })),
+        });
+
+        const alreadyActedCheck = freshActions.find((a) => a.playerId === playerId);
+        if (alreadyActedCheck) {
+          return this.socket.emit("error", { message: "You have already acted this turn" });
         }
 
         freshActions.push(newAction);
-        freshRoom.game_state = {
-          ...freshRoom.game_state,
-          currentTurnActions: freshActions,
-        };
+
+        console.log(`[REST_ACTION] After push:`, {
+          count: freshActions.length,
+          actions: freshActions.map((a) => ({ player: a.playerName, type: a.type })),
+        });
+
+        freshRoom.game_state = { ...freshRoom.game_state, currentTurnActions: freshActions };
         await freshRoom.save();
 
         this.io.to(roomCode).emit("player_action_update", {
@@ -396,23 +415,45 @@ class GameHandler {
           totalActions: freshActions.length,
         });
 
-        const playersCheck = await Player.findAll({
-          where: { room_id: room.id },
+        const players = await Player.findAll({ where: { room_id: room.id } });
+        const alivePlayers = players.filter((p) => p.is_alive);
+
+        console.log(`[REST_ACTION] Checking all acted:`, {
+          actedCount: freshActions.length,
+          aliveCount: alivePlayers.length,
+          shouldResolve: freshActions.length >= alivePlayers.length,
         });
-        const alivePlayers = playersCheck.filter((p) => p.is_alive);
 
         if (freshActions.length >= alivePlayers.length) {
+          console.log(`[REST_ACTION] Calling resolveBattleRound`);
           await this.resolveBattleRound(roomCode);
+        } else {
+          this.io.to(roomCode).emit("waiting_for_players", {
+            actedCount: freshActions.length,
+            totalCount: alivePlayers.length,
+            waitingOn: alivePlayers
+              .filter((p) => !freshActions.find((a) => a.playerId === p.id))
+              .map((p) => ({
+                id: p.id,
+                username: p.username,
+              })),
+          });
         }
         return;
       }
 
-      // Find the skill in character data
-      const skill = player.character_data?.skills?.find((s) => s.name === (skillName || "Basic Attack"));
-      if (!skill) {
-        return this.socket.emit("error", { message: "Skill not found" });
+      // Validate skill was provided
+      if (!skill || !skill.name) {
+        return this.socket.emit("error", { message: "No skill provided" });
       }
-      const staminaCost = skill.staminaCost;
+
+      // Verify skill exists in player's character data
+      const serverSkill = player.character_data?.skills?.find((s) => s.name === skill.name);
+      if (!serverSkill) {
+        return this.socket.emit("error", { message: `Skill "${skill.name}" not found in your character data` });
+      }
+
+      const staminaCost = serverSkill.staminaCost || 0;
 
       // Check if player has enough stamina
       if (player.current_stamina < staminaCost) {
@@ -425,33 +466,49 @@ class GameHandler {
       player.current_stamina = Math.max(0, player.current_stamina - staminaCost);
       await player.save();
 
-      // Add action
-      // Calculate Skill Power from character data
-      const skillPower = player.character_data.skillPower || 1.0;
+      // Get skill power from character data
+      const skillPower = player.character_data.skillPower || 2.0;
+      const skillAmount = serverSkill.amount || 10;
 
       const newAction = {
         playerId,
         playerName: player.username,
-        type: actionType, // 'attack', 'heal', 'defend'
-        skillName: skillName || "Basic Attack",
-        skillAmount: skillAmount || 10,
+        type: actionType,
+        skillName: skill.name,
+        skillType: serverSkill.type,
+        skillAmount: skillAmount,
         skillPower: skillPower,
         staminaCost: staminaCost,
       };
+
+      console.log(`[ACTION] ${player.username} uses ${newAction.skillName}:`, {
+        type: actionType,
+        skillAmount: skillAmount,
+        skillPower: skillPower,
+        staminaCost: staminaCost,
+      });
 
       // Re-fetch room to get latest game_state (prevent race condition)
       const freshRoom = await Room.findOne({ where: { room_code: roomCode } });
       const freshActions = freshRoom.game_state.currentTurnActions || [];
 
+      console.log(`[SKILL_ACTION] Before push:`, {
+        count: freshActions.length,
+        actions: freshActions.map((a) => ({ player: a.playerName, type: a.type })),
+      });
+
       // Check again if player already acted (double-check after potential concurrent request)
       const alreadyActedCheck = freshActions.find((a) => a.playerId === playerId);
       if (alreadyActedCheck) {
-        return this.socket.emit("error", {
-          message: "You have already acted this turn",
-        });
+        return this.socket.emit("error", { message: "You have already acted this turn" });
       }
 
       freshActions.push(newAction);
+
+      console.log(`[SKILL_ACTION] After push:`, {
+        count: freshActions.length,
+        actions: freshActions.map((a) => ({ player: a.playerName, type: a.type })),
+      });
 
       // Update room state with fresh data
       const newGameState = {
@@ -459,7 +516,7 @@ class GameHandler {
         currentTurnActions: freshActions,
       };
       freshRoom.game_state = newGameState;
-      await freshRoom.save(); // Save to persist the action queue
+      await freshRoom.save();
 
       // Broadcast action to room (so others see it)
       this.io.to(roomCode).emit("player_action_update", {
@@ -472,21 +529,25 @@ class GameHandler {
       const players = await Player.findAll({ where: { room_id: room.id } });
       const alivePlayers = players.filter((p) => p.is_alive);
 
+      console.log(`[SKILL_ACTION] Checking all acted:`, {
+        actedCount: freshActions.length,
+        aliveCount: alivePlayers.length,
+        shouldResolve: freshActions.length >= alivePlayers.length,
+      });
+
       if (freshActions.length >= alivePlayers.length) {
-        // Resolve Turn
+        console.log(`[SKILL_ACTION] Calling resolveBattleRound`);
         await this.resolveBattleRound(roomCode);
       } else {
-        // Emit waiting state - show who has acted and who hasn't
-        const playersWhoActed = freshActions.map((a) => a.playerId);
-        const playersStillWaiting = alivePlayers.filter((p) => !playersWhoActed.includes(p.id));
-
         this.io.to(roomCode).emit("waiting_for_players", {
           actedCount: freshActions.length,
           totalCount: alivePlayers.length,
-          waitingFor: playersStillWaiting.map((p) => ({
-            id: p.id,
-            username: p.username,
-          })),
+          waitingOn: alivePlayers
+            .filter((p) => !freshActions.find((a) => a.playerId === p.id))
+            .map((p) => ({
+              id: p.id,
+              username: p.username,
+            })),
         });
       }
     } catch (error) {
@@ -502,6 +563,14 @@ class GameHandler {
         return;
       }
 
+      console.log(`[RESOLVE_START] Room fetched for ${roomCode}`);
+      console.log(`[RESOLVE_START] game_state exists:`, !!room.game_state);
+      console.log(`[RESOLVE_START] currentTurnActions:`, {
+        exists: !!room.game_state.currentTurnActions,
+        length: room.game_state.currentTurnActions?.length,
+        content: room.game_state.currentTurnActions?.map((a) => ({ player: a.playerName, type: a.type })),
+      });
+
       const players = await Player.findAll({ where: { room_id: room.id } });
       if (!players || players.length === 0) {
         console.error(`No players found for room ${roomCode}`);
@@ -511,28 +580,168 @@ class GameHandler {
       const currentEnemy = gameState.currentEnemy;
       const playerActions = gameState.currentTurnActions;
 
+      console.log(`[RESOLVE_START] playerActions array:`, {
+        length: playerActions?.length,
+        content: playerActions?.map((a) => ({ player: a.playerName, type: a.type })),
+      });
+
       // Validate enemy exists for battle
       if (!currentEnemy) {
         console.error(`No enemy found for battle in room ${roomCode}`);
         return;
       }
 
-      // Call AI to generate narration and logic
+      console.log(
+        `[BATTLE] Round ${gameState.round} - Player actions:`,
+        playerActions.map((a) => ({
+          player: a.playerName,
+          type: a.type,
+          skill: a.skillName,
+          amount: a.skillAmount,
+          power: a.skillPower,
+        })),
+      );
+
+      // ===== CALCULATE DAMAGE HERE (NOT in battleNarrationGenerator) =====
+      const processedActions = playerActions.map((action) => {
+        let result;
+
+        if (action.type === "rest") {
+          // REST actions already have dice roll and stamina regain
+          result = {
+            actionType: "rest",
+            diceRoll: action.diceRoll,
+            staminaRegained: action.staminaRegained,
+          };
+        } else if (action.type === "attack") {
+          // Calculate attack damage
+          const diceRoll = this.rollD20();
+          const isCritical = diceRoll >= 18;
+          const isMiss = diceRoll <= 2;
+
+          let finalDamage;
+          if (isMiss) {
+            finalDamage = 0;
+          } else {
+            const skillPower = action.skillPower !== undefined ? action.skillPower : 2.0;
+            finalDamage = action.skillAmount * skillPower + diceRoll / 10;
+            if (isCritical) finalDamage *= 2;
+            finalDamage = Math.round(finalDamage * 10) / 10;
+          }
+
+          result = {
+            actionType: "attack",
+            diceRoll: diceRoll,
+            finalDamage: finalDamage,
+            isCritical: isCritical,
+            isMiss: isMiss,
+          };
+        } else if (action.type === "heal") {
+          // Calculate heal amount
+          const diceRoll = this.rollD20();
+          const skillPower = action.skillPower !== undefined ? action.skillPower : 2.0;
+          const finalHeal = Math.round((action.skillAmount * skillPower + diceRoll / 10) * 10) / 10;
+
+          result = {
+            actionType: "heal",
+            diceRoll: diceRoll,
+            finalHeal: finalHeal,
+          };
+        } else if (action.type === "defend") {
+          const diceRoll = this.rollD20();
+          result = {
+            actionType: "defend",
+            diceRoll: diceRoll,
+            defenseBonus: 0.4,
+          };
+        }
+
+        return {
+          playerId: action.playerId,
+          playerName: action.playerName,
+          skillName: action.skillName,
+          skillType: action.skillType,
+          ...result,
+        };
+      });
+
+      console.log(`[DAMAGE_CALC] Round ${gameState.round} calculated damage:`, {
+        playerActions: processedActions.map((a) => ({
+          player: a.playerName,
+          type: a.actionType,
+          damage: a.finalDamage,
+          heal: a.finalHeal,
+          critical: a.isCritical,
+          miss: a.isMiss,
+        })),
+      });
+
+      // ===== APPLY DAMAGE TO ENEMY =====
+      const attackActions = processedActions.filter((a) => a.actionType === "attack");
+      console.log(`[DAMAGE_APPLY] Attack actions found: ${attackActions.length}`);
+      attackActions.forEach((a, idx) => {
+        console.log(
+          `  [${idx}] ${a.playerName} - finalDamage: ${a.finalDamage}, isMiss: ${a.isMiss}, isCritical: ${a.isCritical}`,
+        );
+      });
+
+      const totalDamageToEnemy = attackActions.reduce((sum, a) => sum + (a.finalDamage || 0), 0);
+
+      const totalHealToEnemy = processedActions
+        .filter((a) => a.actionType === "heal")
+        .reduce((sum, a) => sum + (a.finalHeal || 0), 0);
+
+      console.log(`[DAMAGE_APPLY] Round ${gameState.round}:`, {
+        enemyHPBefore: currentEnemy.hp,
+        totalDamageDealt: totalDamageToEnemy,
+        totalHealUsed: totalHealToEnemy,
+        enemyHPAfter: Math.max(0, currentEnemy.hp - totalDamageToEnemy),
+      });
+
+      // Update enemy HP: reduce by damage, increase by heal
+      let newEnemyHP = currentEnemy.hp - totalDamageToEnemy;
+      newEnemyHP = Math.max(0, newEnemyHP); // Can't go below 0
+
+      console.log(`[HP_UPDATE] Updating enemy HP: ${currentEnemy.hp} - ${totalDamageToEnemy} = ${newEnemyHP}`);
+
+      // Call AI to generate NARRATION ONLY (damage already applied)
       const battleResult = await generateBattleNarration({
         theme: room.theme,
         enemy: currentEnemy,
-        playerActions: playerActions,
+        processedActions: processedActions,
         battleState: { currentRound: gameState.round },
         language: room.language,
       });
 
+      console.log(battleResult);
+
+      console.log(`[BATTLE_RESULT] Round ${gameState.round}:`, {
+        totalDamage: totalDamageToEnemy,
+        enemyHPBefore: currentEnemy.hp,
+        enemyHPAfter: newEnemyHP,
+        playerActions: processedActions.map((a) => ({
+          player: a.playerName,
+          type: a.actionType,
+          damage: a.finalDamage,
+          heal: a.finalHeal,
+          critical: a.isCritical,
+          miss: a.isMiss,
+        })),
+      });
+
       // Apply results to DB
 
-      // Update Enemy HP
+      // Update Enemy HP with calculated damage
       const updatedEnemy = {
         ...currentEnemy,
-        hp: battleResult.enemyHP.current,
+        hp: newEnemyHP,
       };
+
+      console.log(`[ENEMY_OBJECT] updatedEnemy created:`, {
+        name: updatedEnemy.name,
+        hpBefore: currentEnemy.hp,
+        hpAfter: updatedEnemy.hp,
+      });
 
       // Process Enemy Action (Damage to players)
       if (battleResult.enemyAction && battleResult.enemyAction.type === "attack") {
@@ -625,7 +834,17 @@ class GameHandler {
       };
       await room.save();
 
+      console.log(`[ROOM_SAVED] Room state saved. Enemy HP in game_state:`, {
+        enemyName: room.game_state.currentEnemy?.name,
+        enemyHP: room.game_state.currentEnemy?.hp,
+      });
+
       // Broadcast results
+      console.log(`[BROADCAST] Sending battle_result event with enemy:`, {
+        name: updatedEnemy.name,
+        hp: updatedEnemy.hp,
+      });
+
       this.io.to(roomCode).emit("battle_result", {
         round: gameState.round,
         narrative: battleResult.narrative,
@@ -832,9 +1051,12 @@ class GameHandler {
         language: room.language,
       });
 
-      // Select a random player to make the choice
-      const choosingPlayerIndex = Math.floor(Math.random() * players.length);
-      const choosingPlayer = players[choosingPlayerIndex];
+      // Select the host to make the choice
+      const choosingPlayer = players.find((p) => p.id === room.host_id);
+      if (!choosingPlayer) {
+        console.error("Host player not found for NPC event");
+        return;
+      }
 
       // Store event in game_state with choosing player info
       room.game_state = {
@@ -1248,6 +1470,13 @@ class GameHandler {
       console.error("Error fetching game state snapshot:", error);
       throw error;
     }
+  }
+
+  /**
+   * Roll a d20 (1-20)
+   */
+  rollD20() {
+    return Math.floor(Math.random() * 20) + 1;
   }
 }
 
