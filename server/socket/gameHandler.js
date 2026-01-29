@@ -629,9 +629,15 @@ class GameHandler {
       });
 
       // ===== APPLY DAMAGE TO ENEMY =====
-      const totalDamageToEnemy = processedActions
-        .filter((a) => a.actionType === "attack")
-        .reduce((sum, a) => sum + (a.finalDamage || 0), 0);
+      const attackActions = processedActions.filter((a) => a.actionType === "attack");
+      console.log(`[DAMAGE_APPLY] Attack actions found: ${attackActions.length}`);
+      attackActions.forEach((a, idx) => {
+        console.log(
+          `  [${idx}] ${a.playerName} - finalDamage: ${a.finalDamage}, isMiss: ${a.isMiss}, isCritical: ${a.isCritical}`,
+        );
+      });
+
+      const totalDamageToEnemy = attackActions.reduce((sum, a) => sum + (a.finalDamage || 0), 0);
 
       const totalHealToEnemy = processedActions
         .filter((a) => a.actionType === "heal")
@@ -647,6 +653,8 @@ class GameHandler {
       // Update enemy HP: reduce by damage, increase by heal
       let newEnemyHP = currentEnemy.hp - totalDamageToEnemy;
       newEnemyHP = Math.max(0, newEnemyHP); // Can't go below 0
+
+      console.log(`[HP_UPDATE] Updating enemy HP: ${currentEnemy.hp} - ${totalDamageToEnemy} = ${newEnemyHP}`);
 
       // Call AI to generate NARRATION ONLY (damage already applied)
       const battleResult = await generateBattleNarration({
@@ -680,6 +688,12 @@ class GameHandler {
         ...currentEnemy,
         hp: newEnemyHP,
       };
+
+      console.log(`[ENEMY_OBJECT] updatedEnemy created:`, {
+        name: updatedEnemy.name,
+        hpBefore: currentEnemy.hp,
+        hpAfter: updatedEnemy.hp,
+      });
 
       // Process Enemy Action (Damage to players)
       if (battleResult.enemyAction && battleResult.enemyAction.type === "attack") {
@@ -772,7 +786,17 @@ class GameHandler {
       };
       await room.save();
 
+      console.log(`[ROOM_SAVED] Room state saved. Enemy HP in game_state:`, {
+        enemyName: room.game_state.currentEnemy?.name,
+        enemyHP: room.game_state.currentEnemy?.hp,
+      });
+
       // Broadcast results
+      console.log(`[BROADCAST] Sending battle_result event with enemy:`, {
+        name: updatedEnemy.name,
+        hp: updatedEnemy.hp,
+      });
+
       this.io.to(roomCode).emit("battle_result", {
         round: gameState.round,
         narrative: battleResult.narrative,
