@@ -30,10 +30,43 @@ class GameHandler {
 
   async joinRoom({ roomCode, playerId, username }) {
     try {
-      // Prevent double join from same socket
-      if (this.socket.data.roomCode === roomCode && this.socket.data.playerId === playerId) {
-        console.log(`[JOIN] Player ${playerId} already in room ${roomCode}, ignoring duplicate join`);
-        return; // Already joined, ignore
+      // Check if already in room - if so, just resync game state
+      if (this.socket.data.roomCode === roomCode && this.socket.data.playerId) {
+        console.log(
+          `[JOIN] Player ${this.socket.data.playerId} already in room ${roomCode}, sending game state sync`,
+        );
+
+        // Still send game state if game is in progress
+        const room = await Room.findOne({ where: { room_code: roomCode } });
+        if (room && room.status === "playing") {
+          const players = await Player.findAll({ where: { room_id: room.id } });
+
+          this.socket.emit("game_state_sync", {
+            playerId: this.socket.data.playerId,
+            room: {
+              id: room.id,
+              room_code: room.room_code,
+              status: room.status,
+              theme: room.theme,
+              language: room.language,
+              current_node_index: room.current_node_index,
+              host_id: room.host_id,
+            },
+            dungeon: room.dungeon_data,
+            gameState: {
+              round: room.game_state?.round || 1,
+              currentNode: room.game_state?.currentNode,
+              currentEnemy: room.game_state?.currentEnemy,
+              currentTurnActions: room.game_state?.currentTurnActions || [],
+              currentNPCEvent: room.game_state?.currentNPCEvent || null,
+              npcChoosingPlayerId: room.game_state?.npcChoosingPlayerId || null,
+              adventureLog: room.game_state?.adventure_log || [],
+            },
+            players: players,
+            timestamp: new Date().toISOString(),
+          });
+        }
+        return;
       }
 
       const room = await Room.findOne({ where: { room_code: roomCode } });

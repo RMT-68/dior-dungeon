@@ -148,7 +148,11 @@ export default function GameRoom() {
 
       if (data.players) {
         setPlayers(data.players);
-        const myPlayer = data.players.find((p) => p.id === myPlayerId);
+        // Use localStorage as fallback for closure issue
+        const currentPlayerId = myPlayerId || localStorage.getItem("playerId");
+        const myPlayer = data.players.find(
+          (p) => p.id === currentPlayerId || p.id === parseInt(currentPlayerId),
+        );
         if (myPlayer) {
           updateCharacterFromPlayer(myPlayer);
         }
@@ -193,6 +197,13 @@ export default function GameRoom() {
       // Update character from player data
       if (myPlayer) {
         updateCharacterFromPlayer(myPlayer);
+      } else {
+        console.log(
+          "[GAME_START] Could not find my player. myPlayerId:",
+          currentPlayerId,
+          "players:",
+          data.players,
+        );
       }
 
       addMessage("system", `⚔️ Adventure begins in ${data.dungeon?.dungeonName || "the dungeon"}!`);
@@ -223,8 +234,15 @@ export default function GameRoom() {
       setCurrentEnemy(data.gameState?.currentEnemy || null);
       setPlayers(data.players || []);
 
-      // Update my character from players data
-      const myPlayer = data.players?.find((p) => p.id === myPlayerId);
+      // Set hostId if available
+      if (data.room?.host_id) {
+        setHostId(data.room.host_id);
+        setIsHost(data.playerId === data.room.host_id);
+      }
+
+      // Update my character from players data - use data.playerId from server
+      const currentPlayerId = data.playerId || myPlayerId;
+      const myPlayer = data.players?.find((p) => p.id === currentPlayerId);
       if (myPlayer) {
         updateCharacterFromPlayer(myPlayer);
       }
