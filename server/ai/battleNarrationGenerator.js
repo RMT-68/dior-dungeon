@@ -1,6 +1,13 @@
 const { aiHelper } = require("../helpers/aiHelper");
 
 /**
+ * Roll a d20 (1-20)
+ */
+function rollD20() {
+  return Math.floor(Math.random() * 20) + 1;
+}
+
+/**
  * Generate battle narration flavor text
  * @param {Object} params - Battle parameters
  * @param {string} params.theme - Dungeon theme
