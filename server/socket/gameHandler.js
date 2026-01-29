@@ -318,6 +318,10 @@ class GameHandler {
       // Let's assume start triggers the view.
       if (firstNode.type === "npc") {
         await this.triggerNPCEvent(room, updatedPlayers, roomCode);
+      } else if (firstNode.type === "enemy" && initialEnemy) {
+        // Start action timers for the first battle
+        console.log(`[START_GAME] Starting action timers for initial battle`);
+        this.startActionTimers(roomCode, 30000);
       }
     } catch (error) {
       console.error("Start game error:", error);
@@ -880,6 +884,8 @@ class GameHandler {
           round: nextRound,
           narrative: "A new round begins. Prepare your actions!",
         });
+        // Start action timers for the new round
+        console.log(`[ROUND_START] Starting action timers for round ${nextRound}`);\n        this.startActionTimers(roomCode, 30000);
       }
 
       if (battleStatus === "victory") {
@@ -1026,6 +1032,10 @@ class GameHandler {
 
       if (nextNode.type === "npc") {
         await this.triggerNPCEvent(room, players, roomCode);
+      } else if (nextNode.type === "enemy" && newEnemy) {
+        // Start action timers for the new battle
+        console.log(`[NODE_TRANSITION] Starting action timers for new battle`);
+        this.startActionTimers(roomCode, 30000);
       }
     } catch (error) {
       console.error("Next node error:", error);
@@ -1341,19 +1351,23 @@ class GameHandler {
 
   startActionTimers(roomCode, timeoutMs) {
     // Set timer for each player to auto-submit rest action if they don't act
+    console.log(`[TIMER] Starting action timers for room ${roomCode} - ${timeoutMs}ms`);
     Room.findOne({ where: { room_code: roomCode } }).then((room) => {
       if (!room) {
         console.error(`Room ${roomCode} not found for action timers`);
         return;
       }
       Player.findAll({ where: { room_id: room.id } }).then((players) => {
+        console.log(`[TIMER] Setting timers for ${players.length} players`);
         players.forEach((player) => {
           const timerKey = `${roomCode}:${player.id}`;
           const timeoutId = setTimeout(async () => {
+            console.log(`[TIMER] Timer fired for ${player.username} (${player.id})`);
             // Auto-submit rest action for this player
             await this.autoSubmitRestAction(roomCode, player.id);
           }, timeoutMs);
           this.actionTimers.set(timerKey, timeoutId);
+          console.log(`[TIMER] Set timer for ${player.username}: ${timerKey}`);
         });
 
         // Notify clients that action timers have started
@@ -1368,18 +1382,29 @@ class GameHandler {
 
   async autoSubmitRestAction(roomCode, playerId) {
     try {
+      console.log(`[AUTO_REST] Timer expired for player ${playerId} in room ${roomCode}`);
       const room = await Room.findOne({ where: { room_code: roomCode } });
-      if (!room || room.status !== "playing") return;
+      if (!room || room.status !== "playing") {
+        console.log(`[AUTO_REST] Room not found or not playing: ${room?.status}`);
+        return;
+      }
 
       const player = await Player.findByPk(playerId);
-      if (!player) return;
+      if (!player) {
+        console.log(`[AUTO_REST] Player ${playerId} not found`);
+        return;
+      }
 
       // Check if player already acted
       const currentActions = room.game_state.currentTurnActions || [];
       const alreadyActed = currentActions.find((a) => a.playerId === playerId);
-      if (alreadyActed) return;
+      if (alreadyActed) {
+        console.log(`[AUTO_REST] Player ${player.username} already acted this turn`);
+        return;
+      }
 
       // Auto-submit rest action
+      console.log(`[AUTO_REST] Submitting auto-rest for ${player.username}`);
       const diceRoll = Math.floor(Math.random() * 6) + 1;
       const staminaRegained = diceRoll;
       player.current_stamina = Math.min(player.character_data.maxStamina, player.current_stamina + staminaRegained);
@@ -1433,7 +1458,9 @@ class GameHandler {
       const players = await Player.findAll({ where: { room_id: room.id } });
       const alivePlayers = players.filter((p) => p.is_alive);
 
+      console.log(`[AUTO_REST] Actions: ${freshActions.length}/${alivePlayers.length}`);
       if (freshActions.length >= alivePlayers.length) {
+        console.log(`[AUTO_REST] All players acted, resolving battle round`);
         // Resolve the battle round
         await this.resolveBattleRound(roomCode);
       }
