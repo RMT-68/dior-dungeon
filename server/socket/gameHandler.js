@@ -283,6 +283,7 @@ class GameHandler {
         currentNPCEvent: null,
         npcChoosingPlayerId: null,
       };
+      room.changed("game_state", true); // Mark JSONB field as changed for Sequelize
 
       // Save room status immediately to prevent race conditions
       await room.save();
@@ -411,6 +412,7 @@ class GameHandler {
         });
 
         freshRoom.game_state = { ...freshRoom.game_state, currentTurnActions: freshActions };
+        freshRoom.changed("game_state", true); // Mark JSONB field as changed for Sequelize
         await freshRoom.save();
 
         this.io.to(roomCode).emit("player_action_update", {
@@ -520,6 +522,7 @@ class GameHandler {
         currentTurnActions: freshActions,
       };
       freshRoom.game_state = newGameState;
+      freshRoom.changed("game_state", true); // Mark JSONB field as changed for Sequelize
       await freshRoom.save();
 
       // Broadcast action to room (so others see it)
@@ -836,6 +839,7 @@ class GameHandler {
           : gameState.adventure_log || [],
         currentTurnActions: [], // Reset actions
       };
+      room.changed("game_state", true); // Mark JSONB field as changed for Sequelize
       await room.save();
 
       console.log(`[ROOM_SAVED] Room state saved. Enemy HP in game_state:`, {
@@ -1010,6 +1014,7 @@ class GameHandler {
         logs: [],
         currentTurnActions: [],
       };
+      room.changed("game_state", true); // Mark JSONB field as changed for Sequelize
       await room.save();
 
       // Emit updates
@@ -1069,6 +1074,7 @@ class GameHandler {
         npcChoosingPlayerId: choosingPlayer.id,
         adventure_log: [...(room.game_state.adventure_log || []), { type: "npc_event", npc: event.npcName }],
       };
+      room.changed("game_state", true); // Mark JSONB field as changed for Sequelize
       await room.save();
 
       // Emit event to all players, but indicate who gets to choose
@@ -1163,6 +1169,7 @@ class GameHandler {
         currentNPCEvent: null,
         npcChoosingPlayerId: null,
       };
+      room.changed("game_state", true); // Mark JSONB field as changed for Sequelize
       await room.save();
 
       // Broadcast resolution
@@ -1402,6 +1409,7 @@ class GameHandler {
         ...freshRoom.game_state,
         currentTurnActions: freshActions,
       };
+      freshRoom.changed("game_state", true); // Mark JSONB field as changed for Sequelize
       await freshRoom.save();
 
       // Broadcast auto action
