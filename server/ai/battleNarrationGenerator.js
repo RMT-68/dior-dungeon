@@ -1,48 +1,22 @@
 const { aiHelper } = require("../helpers/aiHelper");
 
 /**
- * Generate battle narration and enemy AI response
+ * Generate battle narration flavor text
  * @param {Object} params - Battle parameters
  * @param {string} params.theme - Dungeon theme
  * @param {Object} params.enemy - Current enemy state
- * @param {Array} params.playerActions - Array of player actions this round
+ * @param {Array} params.processedActions - Array of processed actions WITH damage already calculated
  * @param {Object} params.battleState - Current battle state
  * @param {string} params.language - Language for narration
  * @returns {Promise<Object>} Battle result with narration and enemy action
  */
-async function generateBattleNarration({ theme, enemy, playerActions, battleState, language = "en" }) {
+async function generateBattleNarration({ theme, enemy, processedActions, battleState, language = "en" }) {
   // Validate input
-  if (!theme || !enemy || !playerActions || !battleState) {
+  if (!theme || !enemy || !processedActions || !battleState) {
     throw new Error("Missing required battle parameters");
   }
 
-  // Calculate player action results with dice rolls
-  const processedActions = playerActions.map((action) => {
-    // REST actions already have their D6 diceRoll, don't generate a new one
-    const diceRoll = action.type === "rest" ? action.diceRoll : rollD20();
-    let result;
-
-    if (action.type === "attack") {
-      result = calculateDamage(action, diceRoll);
-    } else if (action.type === "heal") {
-      result = calculateHealing(action, diceRoll);
-    } else if (action.type === "defend") {
-      result = { type: "defend", defenseBonus: 0.4, diceRoll };
-    } else if (action.type === "rest") {
-      result = { type: "rest" };
-    }
-
-    return {
-      playerId: action.playerId,
-      playerName: action.playerName,
-      actionType: action.type,
-      skillName: action.skillName,
-      diceRoll: diceRoll,
-      ...result,
-    };
-  });
-
-  // Calculate total damage to enemy
+  // Calculate enemy HP info for the prompt (for context only, actual HP update is in gameHandler)
   const totalDamageToEnemy = processedActions
     .filter((a) => a.actionType === "attack")
     .reduce((sum, a) => sum + (a.finalDamage || 0), 0);
@@ -196,64 +170,6 @@ Generate ONLY valid JSON:
 /**
  * Roll a 20-sided die
  */
-function rollD20() {
-  return Math.floor(Math.random() * 20) + 1;
-}
-
-/**
- * Calculate damage with dice roll and critical/miss logic
- */
-function calculateDamage(action, diceRoll) {
-  const isCritical = diceRoll >= 18;
-  const isMiss = diceRoll <= 2;
-
-  if (isMiss) {
-    return {
-      type: "attack",
-      baseDamage: action.skillAmount,
-      diceRoll: diceRoll,
-      finalDamage: 0,
-      isCritical: false,
-      isMiss: true,
-    };
-  }
-
-  // Base damage = skill amount × skill power + dice bonus
-  // Use provided skillPower or default to 2.0 if missing
-  const skillPower = action.skillPower !== undefined ? action.skillPower : 2.0;
-  let damage = action.skillAmount * skillPower + diceRoll / 10;
-
-  if (isCritical) {
-    damage *= 2;
-  }
-
-  return {
-    type: "attack",
-    baseDamage: action.skillAmount,
-    diceRoll: diceRoll,
-    finalDamage: Math.round(damage * 10) / 10,
-    isCritical: isCritical,
-    isMiss: false,
-  };
-}
-
-/**
- * Calculate healing with dice roll
- */
-function calculateHealing(action, diceRoll) {
-  const skillPower = action.skillPower !== undefined ? action.skillPower : 2.0;
-  const baseHeal = action.skillAmount * skillPower;
-  const diceBonus = diceRoll / 10;
-  const finalHeal = Math.round((baseHeal + diceBonus) * 10) / 10;
-
-  return {
-    type: "heal",
-    baseHeal: action.skillAmount,
-    diceRoll: diceRoll,
-    finalHeal: finalHeal,
-  };
-}
-
 /**
  * Calculate enemy damage with skillPower multiplier
  */
@@ -371,5 +287,4 @@ function createFallbackBattleResult({
 
 module.exports = {
   generateBattleNarration,
-  rollD20,
 };

@@ -554,11 +554,105 @@ class GameHandler {
         })),
       );
 
-      // Call AI to generate narration and logic
+      // ===== CALCULATE DAMAGE HERE (NOT in battleNarrationGenerator) =====
+      const processedActions = playerActions.map((action) => {
+        let result;
+
+        if (action.type === "rest") {
+          // REST actions already have dice roll and stamina regain
+          result = {
+            actionType: "rest",
+            diceRoll: action.diceRoll,
+            staminaRegained: action.staminaRegained,
+          };
+        } else if (action.type === "attack") {
+          // Calculate attack damage
+          const diceRoll = this.rollD20();
+          const isCritical = diceRoll >= 18;
+          const isMiss = diceRoll <= 2;
+
+          let finalDamage;
+          if (isMiss) {
+            finalDamage = 0;
+          } else {
+            const skillPower = action.skillPower !== undefined ? action.skillPower : 2.0;
+            finalDamage = action.skillAmount * skillPower + diceRoll / 10;
+            if (isCritical) finalDamage *= 2;
+            finalDamage = Math.round(finalDamage * 10) / 10;
+          }
+
+          result = {
+            actionType: "attack",
+            diceRoll: diceRoll,
+            finalDamage: finalDamage,
+            isCritical: isCritical,
+            isMiss: isMiss,
+          };
+        } else if (action.type === "heal") {
+          // Calculate heal amount
+          const diceRoll = this.rollD20();
+          const skillPower = action.skillPower !== undefined ? action.skillPower : 2.0;
+          const finalHeal = Math.round((action.skillAmount * skillPower + diceRoll / 10) * 10) / 10;
+
+          result = {
+            actionType: "heal",
+            diceRoll: diceRoll,
+            finalHeal: finalHeal,
+          };
+        } else if (action.type === "defend") {
+          const diceRoll = this.rollD20();
+          result = {
+            actionType: "defend",
+            diceRoll: diceRoll,
+            defenseBonus: 0.4,
+          };
+        }
+
+        return {
+          playerId: action.playerId,
+          playerName: action.playerName,
+          skillName: action.skillName,
+          skillType: action.skillType,
+          ...result,
+        };
+      });
+
+      console.log(`[DAMAGE_CALC] Round ${gameState.round} calculated damage:`, {
+        playerActions: processedActions.map((a) => ({
+          player: a.playerName,
+          type: a.actionType,
+          damage: a.finalDamage,
+          heal: a.finalHeal,
+          critical: a.isCritical,
+          miss: a.isMiss,
+        })),
+      });
+
+      // ===== APPLY DAMAGE TO ENEMY =====
+      const totalDamageToEnemy = processedActions
+        .filter((a) => a.actionType === "attack")
+        .reduce((sum, a) => sum + (a.finalDamage || 0), 0);
+
+      const totalHealToEnemy = processedActions
+        .filter((a) => a.actionType === "heal")
+        .reduce((sum, a) => sum + (a.finalHeal || 0), 0);
+
+      console.log(`[DAMAGE_APPLY] Round ${gameState.round}:`, {
+        enemyHPBefore: currentEnemy.hp,
+        totalDamageDealt: totalDamageToEnemy,
+        totalHealUsed: totalHealToEnemy,
+        enemyHPAfter: Math.max(0, currentEnemy.hp - totalDamageToEnemy),
+      });
+
+      // Update enemy HP: reduce by damage, increase by heal
+      let newEnemyHP = currentEnemy.hp - totalDamageToEnemy;
+      newEnemyHP = Math.max(0, newEnemyHP); // Can't go below 0
+
+      // Call AI to generate NARRATION ONLY (damage already applied)
       const battleResult = await generateBattleNarration({
         theme: room.theme,
         enemy: currentEnemy,
-        playerActions: playerActions,
+        processedActions: processedActions,
         battleState: { currentRound: gameState.round },
         language: room.language,
       });
@@ -566,10 +660,10 @@ class GameHandler {
       console.log(battleResult);
 
       console.log(`[BATTLE_RESULT] Round ${gameState.round}:`, {
-        totalDamage: battleResult.enemyHP.damage,
-        enemyHPBefore: battleResult.enemyHP.previous,
-        enemyHPAfter: battleResult.enemyHP.current,
-        playerActions: battleResult.playerActions.map((a) => ({
+        totalDamage: totalDamageToEnemy,
+        enemyHPBefore: currentEnemy.hp,
+        enemyHPAfter: newEnemyHP,
+        playerActions: processedActions.map((a) => ({
           player: a.playerName,
           type: a.actionType,
           damage: a.finalDamage,
@@ -581,10 +675,10 @@ class GameHandler {
 
       // Apply results to DB
 
-      // Update Enemy HP
+      // Update Enemy HP with calculated damage
       const updatedEnemy = {
         ...currentEnemy,
-        hp: battleResult.enemyHP.current,
+        hp: newEnemyHP,
       };
 
       // Process Enemy Action (Damage to players)
@@ -1304,6 +1398,13 @@ class GameHandler {
       console.error("Error fetching game state snapshot:", error);
       throw error;
     }
+  }
+
+  /**
+   * Roll a d20 (1-20)
+   */
+  rollD20() {
+    return Math.floor(Math.random() * 20) + 1;
   }
 }
 
