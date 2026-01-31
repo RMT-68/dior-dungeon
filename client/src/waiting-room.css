@@ -1,0 +1,320 @@
+@import url("https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap");
+
+/* ===============================
+   BACKGROUND
+================================ */
+.dungeon-bg {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at center, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.9)),
+    url("/waiting.jpg");
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 60px;
+  color: #e5e7eb;
+  font-family: "MedievalSharp", cursive;
+}
+
+/* ===============================
+   TITLE & ROOM CODE
+================================ */
+.waiting-title {
+  font-size: 2.2rem;
+  letter-spacing: 4px;
+  margin-bottom: 10px;
+  color: #facc15;
+  text-shadow: 0 0 18px rgba(250, 204, 21, 0.5);
+}
+
+.waiting-sub {
+  font-size: 0.9rem;
+  letter-spacing: 2px;
+  margin-bottom: 36px;
+  color: rgba(230, 230, 230, 0.85);
+}
+
+.waiting-sub strong {
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.7);
+}
+
+/* ===============================
+   DUNGEON INFO
+================================ */
+.waiting-dungeon-info {
+  max-width: 1050px;
+  padding: 26px 36px;
+  margin-bottom: 40px;
+  background: linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.9));
+  border: 2px solid rgba(250, 204, 21, 0.45);
+  box-shadow: inset 0 0 35px rgba(0, 0, 0, 0.9);
+}
+
+.waiting-dungeon-info h3 {
+  font-size: 1.6rem;
+  color: #facc15;
+  margin-bottom: 10px;
+}
+
+.waiting-dungeon-info p {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  opacity: 0.85;
+}
+
+.waiting-dungeon-info .badge {
+  margin-top: 10px;
+  display: inline-block;
+  padding: 6px 14px;
+  background: linear-gradient(180deg, #facc15, #ca8a04);
+  color: #1c1917;
+  border: 2px solid #1c1917;
+  font-size: 0.75rem;
+  letter-spacing: 2px;
+}
+
+/* ===============================
+   MAIN PANEL
+================================ */
+.waiting-focus {
+  padding: 48px 64px;
+  background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.85));
+  border: 1px solid rgba(250, 204, 21, 0.25);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.9);
+}
+
+/* ===============================
+   PLAYER CARDS GRID
+================================ */
+.player-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 300px);
+  gap: 36px;
+  margin-bottom: 40px;
+}
+
+/* ===============================
+   PLAYER CARD
+================================ */
+.player-card {
+  height: 460px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  background:
+    radial-gradient(
+      circle at top,
+      rgba(255, 255, 255, 0.05),
+      rgba(0, 0, 0, 0.9)
+    ),
+    linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.9));
+
+  border: 2px solid rgba(250, 204, 21, 0.45);
+  box-shadow:
+    inset 0 0 40px rgba(0, 0, 0, 0.9),
+    0 25px 60px rgba(0, 0, 0, 0.9);
+}
+
+.player-card.empty {
+  opacity: 0.25;
+  border-style: dashed;
+}
+
+.player-card.ready {
+  border-color: #facc15;
+  box-shadow:
+    0 0 20px rgba(250, 204, 21, 0.45),
+    inset 0 0 30px rgba(250, 204, 21, 0.15);
+}
+
+/* ===============================
+   PLAYER HEADER
+================================ */
+.player-name {
+  font-size: 0.95rem;
+  letter-spacing: 1px;
+  opacity: 0.9;
+}
+
+/* ===============================
+   CHARACTER INFO
+================================ */
+.character-info {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* ROLE */
+.character-role {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.1rem;
+  color: #facc15;
+  letter-spacing: 3px;
+  margin-bottom: 14px;
+  text-shadow: 0 0 10px rgba(250, 204, 21, 0.5);
+}
+
+.character-role::before {
+  content: "🛡️";
+}
+
+/* STATS */
+.character-stats {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+}
+
+/* ===============================
+   SKILLS (FIXED + BADGES)
+================================ */
+.character-skills ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* 2 kolom: nama | badge */
+.character-skills li {
+  display: grid;
+  grid-template-columns: 1fr 64px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  position: relative;
+  padding-left: 14px;
+}
+
+/* bullet */
+.character-skills li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  opacity: 0.6;
+}
+
+/* ===============================
+   BADGE DMG / HEAL
+================================ */
+.skill-type {
+  justify-self: end;
+  text-align: center;
+  font-size: 0.65rem;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+/* DAMAGE BADGE */
+.skill-type.damage {
+  color: #7f1d1d;
+  background: linear-gradient(180deg, #ff6b6b, #b91c1c);
+  border: 1px solid #7f1d1d;
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.6);
+}
+
+.skill-type.damage::before {
+  content: "⚔ ";
+}
+
+/* HEAL BADGE */
+.skill-type.healing {
+  color: #064e3b;
+  background: linear-gradient(180deg, #6bffb3, #059669);
+  border: 1px solid #064e3b;
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.6);
+}
+
+.skill-type.healing::before {
+  content: "✦ ";
+}
+
+/* ===============================
+   BUTTONS
+================================ */
+.btn-dungeon,
+.btn-dungeon-primary {
+  margin-top: 16px;
+  background:
+    linear-gradient(180deg, #facc15, #ca8a04),
+    repeating-linear-gradient(
+      135deg,
+      rgba(0, 0, 0, 0.2),
+      rgba(0, 0, 0, 0.2) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  color: #1c1917;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  border: 3px solid #1c1917;
+}
+
+.btn-dungeon span,
+.btn-dungeon-primary span {
+  font-family: "MedievalSharp", cursive;
+}
+
+/* Danger Button (Leave) */
+.btn-dungeon-danger {
+  margin-top: 16px;
+  background:
+    linear-gradient(180deg, #ef4444, #991b1b),
+    repeating-linear-gradient(
+      135deg,
+      rgba(0, 0, 0, 0.2),
+      rgba(0, 0, 0, 0.2) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  border: 3px solid #1c1917;
+  transition: all 0.3s ease;
+}
+
+.btn-dungeon-danger:hover {
+  background: linear-gradient(180deg, #dc2626, #7f1d1d);
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+}
+
+.btn-dungeon-danger span {
+  font-family: "MedievalSharp", cursive;
+}
+
+/* ===============================
+   ACTION BAR
+================================ */
+.waiting-actions {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+}
+
+/* ===============================
+   RESPONSIVE
+================================ */
+@media (max-width: 900px) {
+  .player-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .waiting-focus {
+    padding: 30px 20px;
+  }
+}

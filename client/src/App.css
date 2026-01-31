@@ -1,0 +1,183 @@
+@import url("https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap");
+
+.dungeon-hero {
+  background-image:
+    linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.85),
+      rgba(0, 0, 0, 0.45),
+      rgba(0, 0, 0, 0.9)
+    ),
+    url("/hero-bg.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.hero-content {
+  max-width: 900px;
+}
+
+.hero-logo-wrapper {
+  margin-bottom: 10px;
+}
+
+.hero-logo {
+  max-height: 300px;
+}
+
+.hero-subtitle {
+  font-family: "MedievalSharp", cursive;
+  font-size: 1.1rem;
+  letter-spacing: 1.2px;
+  color: rgba(248, 250, 252, 0.82);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+  max-width: 760px;
+  margin: 0 auto 3.3rem auto;
+  line-height: 1.45;
+}
+
+.dungeon-form {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.dungeon-form-inner {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  padding: 22px 24px;
+  background: rgba(0, 0, 0, 0.82);
+  border: 2px solid rgba(250, 204, 21, 0.35);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.9);
+  overflow: hidden;
+}
+
+.dungeon-form-inner::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+  background:
+    linear-gradient(
+      rgba(0, 0, 0, 0.7),
+      rgba(0, 0, 0, 0.9)
+    );
+  transform: skewX(-4deg);
+  z-index: 0;
+}
+
+.dungeon-form-inner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 6% 8%, rgba(0,0,0,.9) 6px, transparent 7px),
+    radial-gradient(circle at 94% 12%, rgba(0,0,0,.8) 5px, transparent 6px),
+    radial-gradient(circle at 10% 92%, rgba(0,0,0,.9) 7px, transparent 8px),
+    radial-gradient(circle at 90% 88%, rgba(0,0,0,.85) 6px, transparent 7px);
+  z-index: 2;
+}
+.dungeon-form {
+  margin-top: -40px;
+}
+
+.dungeon-form-inner > * {
+  position: relative;
+  z-index: 3;
+}
+
+.dungeon-input {
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  color: #f8fafc;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+}
+
+.dungeon-input::placeholder {
+  color: rgba(248, 250, 252, 0.55);
+}
+
+.dungeon-input:focus {
+  background: rgba(0, 0, 0, 0.85);
+  border-color: #facc15;
+  box-shadow: none;
+  color: #fff;
+}
+
+.btn-dungeon {
+  position: relative;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.btn-dungeon span {
+  display: inline-block;
+  padding: 10px 22px;
+  font-family: "MedievalSharp", cursive;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  background:
+    linear-gradient(180deg, #facc15, #ca8a04),
+    repeating-linear-gradient(
+      135deg,
+      rgba(0, 0, 0, 0.2),
+      rgba(0, 0, 0, 0.2) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  border: 3px solid #1c1917;
+  color: #1c1917;
+}
+
+.btn-dungeon-primary {
+  position: relative;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.btn-dungeon-primary::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, #facc15, #eab308),
+    repeating-linear-gradient(
+      135deg,
+      rgba(0, 0, 0, 0.18),
+      rgba(0, 0, 0, 0.18) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  border: 2px solid #1c1917;
+  transform: skewX(-10deg);
+  z-index: 0;
+}
+
+.btn-dungeon-primary span {
+  position: relative;
+  display: block;
+  padding: 14px 36px;
+  font-family: "MedievalSharp", cursive;
+  font-weight: 900;
+  letter-spacing: 1.6px;
+  color: #1c1917;
+  z-index: 1;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .hero-logo {
+    max-height: 220px;
+  }
+
+  .hero-subtitle {
+    font-size: 1rem;
+    padding: 0 1rem;
+  }
+}
